@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#4f46e5" />
+  <title>北化二课活动</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./home.css" />
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('wah_theme');
+        var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body class="home">
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand-link" href="./" title="北化二课活动">
+        <div class="brand-logo">汇</div>
+        <span class="brand-name" id="siteTitle">北化二课活动</span>
+      </a>
+
+      <label class="search-mini" for="searchInput">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="searchInput" type="search" placeholder="搜活动 / 公众号…" autocomplete="off" />
+      </label>
+
+      <div class="topbar-actions">
+        <span class="fresh-dot-pill" id="livePill" title="数据更新状态">
+          <span class="live-dot"></span>
+          <span id="liveStatusText">同步中</span>
+        </span>
+        <button class="icon-btn" id="themeToggle" type="button" title="深浅主题" aria-label="切换主题"></button>
+        <button class="icon-btn" id="refreshBtn" type="button" title="刷新" aria-label="刷新">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="filter-bar">
+    <div class="container filter-inner">
+      <div class="chip-row" id="tagBar"></div>
+      <div class="filter-right">
+        <label class="toggle-ended" title="隐藏报名已截止的活动">
+          <input type="checkbox" id="hideEndedCheck" />
+          <span>隐藏已截止</span>
+        </label>
+        <div class="select-wrap">
+          <select id="sourceFilter" aria-label="按来源公众号筛选">
+            <option value="">全部公众号</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main class="container main-area">
+    <div id="cacheBanner" class="cache-banner hidden" role="status">
+      <div id="cacheBannerText"></div>
+      <button class="btn btn-sm" id="retryOnlineBtn" type="button">重新同步</button>
+    </div>
+
+    <div id="reminderToast" class="reminder-toast hidden" role="alert"></div>
+
+    <section id="activitiesGrid" class="cards-grid" aria-live="polite">
+      <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
+      <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
+      <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
+    </section>
+  </main>
+
+  <footer class="mini-footer">
+    <div class="container mini-footer-inner">
+      <span id="lastUpdateText"></span>
+      <a href="/admin" class="admin-quiet-link">管理</a>
+    </div>
+  </footer>
+
+  <!-- 静音报名提醒弹窗 -->
+  <div id="remindModal" class="rm-backdrop hidden">
+    <div class="rm-dialog" role="dialog" aria-modal="true" aria-labelledby="rmTitle">
+      <div class="rm-head">
+        <h3 id="rmTitle">静音报名提醒（不响铃）</h3>
+        <button type="button" id="rmClose" class="icon-btn" style="width:30px;height:30px;">✕</button>
+      </div>
+      <div id="rmActName" class="rm-act-name"></div>
+      <div class="rm-note">仅通过<strong>简短消息 + 轻微振动</strong>提醒，绝不响铃，上课时可安心使用。</div>
+
+      <div id="rmQuickWrap" class="rm-quick-group"></div>
+
+      <div class="rm-field">
+        <label for="rmCustomTime">自定义提醒时间</label>
+        <input type="datetime-local" id="rmCustomTime" class="input" />
+      </div>
+
+      <div class="rm-actions">
+        <button type="button" id="rmIcsBtn" class="btn btn-sm" title="写入手机系统日历（无声弹窗，关网页也生效）">导入手机日历(无声)</button>
+        <button type="button" id="rmCancelExisting" class="btn btn-sm btn-danger hidden">取消提醒</button>
+        <button type="button" id="rmSaveBtn" class="btn btn-sm btn-primary">开启静音振动提醒</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="back-top" id="backTop" type="button" aria-label="回到顶部">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+  </button>
+
+  <script src="./app.js"></script>
+</body>
+</html>
