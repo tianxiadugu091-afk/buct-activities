@@ -1,0 +1,10 @@
+{
+  "name": "校园活动实时汇",
+  "short_name": "活动实时汇",
+  "description": "北京化工大学公众号活动实时聚合，支持离线缓存查看与直达原推文",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f6f8fb",
+  "theme_color": "#2563eb",
+  "lang": "zh-CN"
+}
