@@ -31,7 +31,12 @@ function escapeHtml(str) {
 
 function safeHref(url) {
   if (!url || typeof url !== 'string') return '';
-  return /^https?:\/\//i.test(url.trim()) ? url.trim() : '';
+  const trimmed = url.trim().replace(/&amp;/gi, '&').replace(/#(?:rd|wechat_redirect)$/i, '');
+  if (!/^https?:\/\//i.test(trimmed)) return '';
+  return trimmed.replace(
+    /^(https?:\/\/mp\.weixin\.qq\.com\/s\/)([^/?#]+)/i,
+    (_, prefix, slug) => `${prefix.replace(/^http:/i, 'https:')}${slug.replace(/~|%7e/gi, '_')}`
+  );
 }
 
 function safeColor(hex, fallback = '#4f46e5') {
@@ -187,7 +192,8 @@ function fireSilentReminder(rem) {
         vibrate: [120, 70, 120],
       });
       n.onclick = () => {
-        if (rem.url) window.open(rem.url, '_blank', 'noopener,noreferrer');
+        const target = safeHref(rem.url);
+        if (target) window.open(target, '_blank', 'noopener,noreferrer');
       };
     }
   } catch {}
@@ -235,7 +241,7 @@ function downloadSilentIcs(item, triggerMs) {
   };
   const startMs = triggerMs || Date.now() + 10 * 60 * 1000;
   const endMs = startMs + 15 * 60 * 1000;
-  const desc = `来源：${item.source_account_name}\\n原推文：${item.source_article_url || ''}`;
+  const desc = `来源：${item.source_account_name}\\n原推文：${safeHref(item.source_article_url) || item.source_article_url || ''}`;
   // ACTION:DISPLAY triggers visual banner/vibration following silent mode (NO ACTION:AUDIO ringtone)
   const ics = [
     'BEGIN:VCALENDAR',
@@ -566,7 +572,7 @@ document.getElementById('rmSaveBtn').addEventListener('click', async () => {
   state.reminders[item.id] = {
     atMs,
     title: item.title,
-    url: item.source_article_url || '',
+    url: safeHref(item.source_article_url) || '',
     fired: false,
   };
   saveReminders();
