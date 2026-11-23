@@ -1,6 +1,7 @@
 const CACHE_KEY = 'wah_public_snapshot_v2';
 const REMIND_KEY = 'wah_silent_reminders_v1';
 const PROFILE_KEY = 'wah_user_profile_v1';
+const VIEW_MODE_KEY = 'wah_view_mode_v1';
 const THEME_KEY = 'wah_theme';
 const IS_STATIC_HOST =
   window.location.protocol === 'file:' ||
@@ -15,6 +16,14 @@ const DEFAULT_PROFILE = {
   showClubOnly: false,
 };
 
+function resolveInitialViewMode() {
+  try {
+    const saved = localStorage.getItem(VIEW_MODE_KEY);
+    if (saved === 'shelf' || saved === 'grid') return saved;
+  } catch {}
+  return window.innerWidth <= 760 ? 'shelf' : 'grid';
+}
+
 const state = {
   tagId: '',
   source: '',
@@ -23,6 +32,7 @@ const state = {
   onlyEligible: false,
   q: '',
   hideEnded: false,
+  viewMode: resolveInitialViewMode(),
   profile: { ...DEFAULT_PROFILE },
   meta: null,
   allItems: [],
@@ -123,6 +133,8 @@ function avatarChar(name) {
 const ICONS = {
   sun: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>',
   moon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>',
+  shelf: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/><path d="M8 7h6"/></svg>',
+  grid: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
 };
 
 /* ==================== 报名状态与活动过期计算 ==================== */
@@ -705,17 +717,690 @@ function renderCard(item) {
   `;
 }
 
-function renderFilteredLocal() {
+/* ==================== Wenku8 同款 3D 波浪抽书架引擎 ==================== */
+const ArchiveWaveShelf = (() => {
+  const DEPTH_X = 0.66;
+  const DEPTH_Y = -0.30;
+  const ROW_STEP = 2.5;
+  const WAVE_RADIUS = 1.48;
+  const DRAG_RATE = 4.4;
+  const OMEGA = 12.0;
+  const MIN_FLING_VEL = 50; // px/s
+  const HALF_WIN = 9;
+
+  let items = [];
+  let focus = 0;
+  let entrance = 1;
+  let geo = null;
+  let poolNodes = [];
+  let lastActiveModIdx = -1;
+  let lastDetentLane = 0;
+  let lastHapticMs = 0;
+  let hapticArmed = false;
+
+  let animRaf = 0;
+  let entranceRaf = 0;
+  let simState = null;
+
+  // Pointer drag state
+  let dragPointerId = null;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragStartFocus = 0;
+  let dragLocked = null; // null | 'h' | 'v'
+  let dragMoved = false;
+  let velocitySamples = [];
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const easeOutCubic = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
+  const mod = (n, m) => (m <= 0 ? 0 : ((n % m) + m) % m);
+
+  // Exact Cubic(0.2, 1.06, 0.35, 1) evaluator matching Wenku8 archive_wave.dart
+  function evalOvershootCubic(t) {
+    const x1 = 0.2, y1 = 1.06, x2 = 0.35, y2 = 1.0;
+    const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+    const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+    let u = clamp(t, 0, 1);
+    for (let i = 0; i < 6; i++) {
+      const xu = ((ax * u + bx) * u + cx) * u - t;
+      const dx = (3 * ax * u + 2 * bx) * u + cx;
+      if (Math.abs(dx) < 1e-5) break;
+      u = clamp(u - xu / dx, 0, 1);
+    }
+    return ((ay * u + by) * u + cy) * u;
+  }
+
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function measure() {
+    const stage = document.getElementById('shelfStage');
+    if (!stage) return null;
+    const rectW = stage.clientWidth || Math.min(window.innerWidth - 24, 520);
+    const w = clamp(rectW, 280, 520);
+    const spine = Math.round(clamp(w * 0.056, 18, 22));
+    const pitch = spine + 12;
+    const cover = Math.round(clamp(w * 0.36, 122, 156));
+    const height = Math.round(((cover - 20) * 166) / 118 + 62);
+    const footprint = spine + cover * DEPTH_X;
+    const pullDist = cover * 0.84;
+    const baseY = -cover * DEPTH_Y + height * 0.54 + 14;
+    const stageHeight = Math.round(baseY + height + 30);
+    const startX = w / 2 - footprint / 2 + pullDist * DEPTH_X;
+    stage.style.height = `${stageHeight}px`;
+    geo = { w, spine, pitch, cover, height, footprint, pullDist, baseY, stageHeight, startX };
+    return geo;
+  }
+
+  function railY(d) {
+    const c = clamp(d, -7, 7);
+    return c * ROW_STEP + c * c * 0.45;
+  }
+
+  function waveWeight(d) {
+    const dist = Math.abs(d);
+    if (dist >= WAVE_RADIUS) return 0;
+    const v = Math.cos((dist / WAVE_RADIUS) * (Math.PI / 2));
+    const crest = entrance >= 1 ? 1 : easeOutCubic((entrance - 0.38) / 0.62);
+    return v * v * crest;
+  }
+
+  function originFor(weight) {
+    const pull = geo.pullDist * weight * (1.24 - 0.24 * weight);
+    const lift = weight * weight * (3 - 2 * weight);
+    return {
+      ox: -pull * DEPTH_X,
+      oy: geo.baseY - pull * DEPTH_Y - geo.height * 0.54 * lift,
+      lift,
+    };
+  }
+
+  function assemblyOffset(d) {
+    if (entrance >= 1) return { ax: 0, ay: 0 };
+    const order = clamp(d + geo.w / geo.pitch / 2 + 2, 0, 16);
+    const start = order * 0.018;
+    const p = easeOutCubic((entrance - start) / 0.52);
+    return {
+      ax: DEPTH_X * 56 * (1 - p),
+      ay: DEPTH_Y * 56 * (1 - p),
+    };
+  }
+
+  function spineGlyphHtml(title) {
+    const clean = String(title || '活动')
+      .replace(/^【[^】]{1,10}】\s*/, '')
+      .replace(/^(?:活动预告|讲座预告|劳动实践|志愿招募)[丨|｜:：\-\s]*/i, '')
+      .trim();
+    const chars = Array.from(clean || String(title || '活动'));
+    const shown = chars.length > 7 ? [...chars.slice(0, 7), '…'] : chars;
+    return shown.map((c) => `<span>${escapeHtml(c)}</span>`).join('');
+  }
+
+  function createBookNode() {
+    const vol = document.createElement('div');
+    vol.className = 'book-vol';
+    vol.innerHTML = `
+      <div class="book-shadow"></div>
+      <div class="book-cover"></div>
+      <div class="book-cap"></div>
+      <div class="book-spine"></div>
+    `;
+    vol._shadow = vol.children[0];
+    vol._cover = vol.children[1];
+    vol._cap = vol.children[2];
+    vol._spine = vol.children[3];
+    vol._boundKey = '';
+    vol._slot = 0;
+    return vol;
+  }
+
+  function bindBookContent(vol, item, itemIdx) {
+    const key = `${item.id}:${itemIdx}:${geo.spine}x${geo.cover}x${geo.height}`;
+    if (vol._boundKey === key) return;
+    vol._boundKey = key;
+
+    const primary = (item.tags || [])[0];
+    const accent = safeColor(primary?.color);
+    const regSt = getRegistrationStatus(item);
+    const aud = getAudienceObj(item);
+    const audShort = item.audience_text || (aud.scope === 'all' ? '全校可报' : '人群详见推文');
+    const numStr = String(itemIdx + 1).padStart(2, '0');
+    const noStr = `NO.${String(itemIdx + 1).padStart(3, '0')}`;
+
+    vol.style.setProperty('--book-accent', accent);
+    vol.classList.toggle('is-ended', regSt.ended);
+
+    vol._cover.style.width = `${geo.cover}px`;
+    vol._cover.style.height = `${geo.height}px`;
+    vol._cap.style.width = `${geo.spine}px`;
+    vol._cap.style.height = `${geo.cover}px`;
+    vol._spine.style.width = `${geo.spine}px`;
+    vol._spine.style.height = `${geo.height}px`;
+    vol._shadow.style.width = `${geo.spine + 6}px`;
+    vol._shadow.style.height = `${Math.round(geo.cover * 0.72)}px`;
+
+    vol._spine.innerHTML = `
+      <span class="book-spine-num">${numStr}</span>
+      <div class="book-spine-title">${spineGlyphHtml(item.title)}</div>
+      <span class="book-spine-dot"></span>
+    `;
+
+    vol._cover.innerHTML = `
+      <div class="book-cover-head">
+        <span class="book-code">${noStr}</span>
+        ${primary ? `<span class="book-cover-tag">${escapeHtml(primary.name)}</span>` : ''}
+      </div>
+      <div class="book-cover-card">
+        <div class="book-cover-title">${escapeHtml(item.title)}</div>
+        <div class="book-cover-meta">
+          <div class="book-cover-aud">👥 ${escapeHtml(audShort)}</div>
+          <span class="book-cover-status ${regSt.kind}">${escapeHtml(regSt.label)}</span>
+        </div>
+      </div>
+      <div class="book-cover-foot">
+        <span class="book-cover-src">${escapeHtml(item.source_account_name)}</span>
+        <span>↗</span>
+      </div>
+    `;
+  }
+
+  function ensurePool(size) {
+    const poolEl = document.getElementById('shelfPool');
+    if (!poolEl) return;
+    while (poolNodes.length < size) {
+      const node = createBookNode();
+      poolEl.appendChild(node);
+      poolNodes.push(node);
+    }
+    while (poolNodes.length > size) {
+      const removed = poolNodes.pop();
+      removed.remove();
+    }
+  }
+
+  function updateActiveReadout(force = false) {
+    const count = items.length;
+    const counterEl = document.getElementById('shelfCounter');
+    const detailEl = document.getElementById('shelfActiveCard');
+    const prevBtn = document.getElementById('shelfPrevBtn');
+    const nextBtn = document.getElementById('shelfNextBtn');
+    if (!count) {
+      if (counterEl) counterEl.textContent = '00 / 00';
+      if (detailEl) detailEl.innerHTML = '';
+      return;
+    }
+
+    const roundedLane = Math.round(focus);
+    const activeIdx = mod(roundedLane, count);
+
+    // Subtle single detent haptic pulse when entering a new book center (matches archive_wave.dart)
+    if (hapticArmed && count > 1 && Math.abs(focus - roundedLane) < 0.14 && roundedLane !== lastDetentLane) {
+      const now = performance.now();
+      if (now - lastHapticMs >= 65) {
+        lastDetentLane = roundedLane;
+        lastHapticMs = now;
+        try {
+          if (navigator.vibrate) navigator.vibrate(8);
+        } catch {}
+      }
+    }
+
+    if (!force && activeIdx === lastActiveModIdx) return;
+    lastActiveModIdx = activeIdx;
+
+    if (counterEl) {
+      counterEl.textContent = `${String(activeIdx + 1).padStart(2, '0')} / ${String(count).padStart(2, '0')}`;
+    }
+    if (prevBtn) prevBtn.disabled = count < 2;
+    if (nextBtn) nextBtn.disabled = count < 2;
+    if (detailEl) {
+      detailEl.innerHTML = renderCard(items[activeIdx]);
+    }
+  }
+
+  function paint() {
+    if (!geo || items.length === 0) return;
+    const count = items.length;
+    const centerSlot = count < 2 ? 0 : Math.round(focus);
+    const startSlot = count < 2 ? 0 : centerSlot - HALF_WIN;
+    const slotCount = count < 2 ? 1 : HALF_WIN * 2 + 1;
+
+    ensurePool(slotCount);
+
+    for (let i = 0; i < slotCount; i++) {
+      const slot = startSlot + i;
+      const itemIdx = count < 2 ? 0 : mod(slot, count);
+      const item = items[itemIdx];
+      const vol = poolNodes[i];
+      vol._slot = slot;
+      vol.dataset.slot = String(slot);
+      vol.dataset.itemIdx = String(itemIdx);
+
+      bindBookContent(vol, item, itemIdx);
+
+      const d = slot - focus;
+      const { ax, ay } = assemblyOffset(d);
+      const slotX = geo.startX + d * geo.pitch + ax;
+      const slotY = railY(d) + ay;
+
+      // Hide slots completely outside the horizontal bank
+      if (slotX + geo.footprint + 40 < -60 || slotX - geo.pullDist * DEPTH_X > geo.w + 80) {
+        vol.style.display = 'none';
+        continue;
+      }
+      vol.style.display = '';
+      vol.style.zIndex = String(1000 + i);
+      vol.style.transform = `translate3d(${slotX.toFixed(2)}px, ${slotY.toFixed(2)}px, 0)`;
+
+      const w = waveWeight(d);
+      const { ox, oy, lift } = originFor(w);
+      const spineDrop = geo.spine * 0.1;
+
+      vol.classList.toggle('is-focused', Math.abs(d) < 0.28);
+
+      // Exact shared-vertex 2D affine transforms matching Wenku8 ArchiveBoxDepthRender
+      vol._cover.style.transform = `matrix(${DEPTH_X}, ${DEPTH_Y}, 0, 1, ${(ox + geo.spine).toFixed(2)}, ${(
+        oy + spineDrop
+      ).toFixed(2)})`;
+      vol._cap.style.transform = `matrix(1, 0.1, ${DEPTH_X}, ${DEPTH_Y}, ${ox.toFixed(2)}, ${oy.toFixed(2)})`;
+      vol._spine.style.transform = `matrix(1, 0.1, 0, 1, ${ox.toFixed(2)}, ${oy.toFixed(2)})`;
+
+      // Ground contact shadow softens as the book lifts out of the bank
+      vol._shadow.style.transform = `matrix(1, 0.1, ${DEPTH_X}, ${DEPTH_Y}, -4, ${(
+        geo.baseY + geo.height + 6
+      ).toFixed(2)})`;
+      vol._shadow.style.opacity = String((1 - lift * 0.55).toFixed(2));
+    }
+
+    updateActiveReadout(false);
+  }
+
+  function stopAnim() {
+    if (animRaf) {
+      cancelAnimationFrame(animRaf);
+      animRaf = 0;
+    }
+    simState = null;
+  }
+
+  function finishEntrance() {
+    if (entranceRaf) {
+      cancelAnimationFrame(entranceRaf);
+      entranceRaf = 0;
+    }
+    if (entrance < 1) {
+      entrance = 1;
+      paint();
+    }
+  }
+
+  function playEntrance() {
+    if (prefersReducedMotion()) {
+      entrance = 1;
+      paint();
+      return;
+    }
+    if (entranceRaf) cancelAnimationFrame(entranceRaf);
+    entrance = 0;
+    const t0 = performance.now();
+    const dur = 640;
+    const tick = (now) => {
+      entrance = clamp((now - t0) / dur, 0, 1);
+      paint();
+      if (entrance < 1) {
+        entranceRaf = requestAnimationFrame(tick);
+      } else {
+        entranceRaf = 0;
+      }
+    };
+    entranceRaf = requestAnimationFrame(tick);
+  }
+
+  function animateToSlot(targetSlot) {
+    if (items.length < 2) return;
+    finishEntrance();
+    stopAnim();
+    const startFocus = focus;
+    if (Math.abs(targetSlot - startFocus) < 0.002) {
+      focus = targetSlot;
+      paint();
+      return;
+    }
+    if (prefersReducedMotion()) {
+      focus = targetSlot;
+      paint();
+      updateActiveReadout(true);
+      return;
+    }
+    hapticArmed = true;
+    lastDetentLane = Math.round(focus);
+    const t0 = performance.now();
+    const dur = 320;
+    const step = (now) => {
+      const p = clamp((now - t0) / dur, 0, 1);
+      focus = startFocus + (targetSlot - startFocus) * evalOvershootCubic(p);
+      paint();
+      if (p < 1) {
+        animRaf = requestAnimationFrame(step);
+      } else {
+        animRaf = 0;
+        focus = targetSlot;
+        hapticArmed = false;
+        paint();
+        updateActiveReadout(true);
+      }
+    };
+    animRaf = requestAnimationFrame(step);
+  }
+
+  // Exact JS port of Wenku8 ArchiveScrollSimulation (momentum coast -> zero-overshoot cubic landing)
+  function startPhysicsScroll(velPxPerSec) {
+    if (!geo || items.length < 2) return;
+    stopAnim();
+    const pitch = geo.pitch;
+    const posPx = focus * pitch;
+    const speed = Math.abs(velPxPerSec);
+    const directional = speed >= MIN_FLING_VEL;
+    const release = directional ? velPxPerSec : 0;
+
+    let dest = Math.round((posPx + release / DRAG_RATE) / pitch) * pitch;
+    if (directional && (dest - posPx) * Math.sign(release) < speed / OMEGA) {
+      const runway = posPx + release / OMEGA;
+      dest = (release > 0 ? Math.ceil(runway / pitch) : Math.floor(runway / pitch)) * pitch;
+    }
+
+    const handoffSpeed = pitch * 4;
+    const coastDuration =
+      speed > handoffSpeed && directional ? Math.log(speed / handoffSpeed) / DRAG_RATE : 0;
+    const coastX = (t) => posPx + (release / DRAG_RATE) * (1 - Math.exp(-DRAG_RATE * t));
+    const coastDx = (t) => release * Math.exp(-DRAG_RATE * t);
+
+    const handoffPos = coastDuration > 0 ? coastX(coastDuration) : posPx;
+    const handoffVel = coastDuration > 0 ? coastDx(coastDuration) : release;
+    const landingDuration = directional && Math.abs(handoffVel) > 1e-3
+      ? Math.max(0.08, (3 * (dest - handoffPos)) / handoffVel)
+      : 0;
+
+    const t0 = performance.now();
+    hapticArmed = true;
+
+    const step = (now) => {
+      const t = (now - t0) / 1000;
+      let curPx;
+      let done = false;
+
+      if (landingDuration === 0) {
+        // Critically damped detent spring with v0 = 0
+        const decay = Math.exp(-OMEGA * t);
+        curPx = dest + (posPx - dest) * (1 + OMEGA * t) * decay;
+        if (Math.abs(curPx - dest) < 0.08 || t > 1.2) {
+          curPx = dest;
+          done = true;
+        }
+      } else if (t < coastDuration) {
+        curPx = coastX(t);
+      } else {
+        const rem = clamp(1 - (t - coastDuration) / landingDuration, 0, 1);
+        curPx = dest - (dest - handoffPos) * rem * rem * rem;
+        if (t >= coastDuration + landingDuration) {
+          curPx = dest;
+          done = true;
+        }
+      }
+
+      focus = curPx / pitch;
+      paint();
+
+      if (!done) {
+        animRaf = requestAnimationFrame(step);
+      } else {
+        animRaf = 0;
+        focus = Math.round(dest / pitch);
+        hapticArmed = false;
+        paint();
+        updateActiveReadout(true);
+      }
+    };
+    animRaf = requestAnimationFrame(step);
+  }
+
+  function stepBy(delta) {
+    if (items.length < 2) return;
+    animateToSlot(Math.round(focus) + delta);
+  }
+
+  function handleTapOnSlot(slot) {
+    if (!items.length) return;
+    if (items.length === 1 || Math.abs(slot - focus) < 0.16) {
+      const item = items[mod(slot, items.length)];
+      const url = safeHref(item?.source_article_url);
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } else {
+      animateToSlot(slot);
+    }
+  }
+
+  function initEvents() {
+    const stage = document.getElementById('shelfStage');
+    if (!stage || stage._shelfBound) return;
+    stage._shelfBound = true;
+
+    stage.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || items.length === 0) return;
+      finishEntrance();
+      stopAnim();
+      dragPointerId = e.pointerId;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      dragStartFocus = focus;
+      dragLocked = null;
+      dragMoved = false;
+      velocitySamples = [{ x: e.clientX, t: performance.now() }];
+      hapticArmed = true;
+      lastDetentLane = Math.round(focus);
+    });
+
+    stage.addEventListener('pointermove', (e) => {
+      if (dragPointerId !== e.pointerId || !geo) return;
+      const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
+
+      if (!dragLocked) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        dragLocked = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
+        if (dragLocked === 'h') {
+          stage.classList.add('dragging');
+          try {
+            stage.setPointerCapture(e.pointerId);
+          } catch {}
+        }
+      }
+      if (dragLocked !== 'h') return;
+
+      dragMoved = true;
+      if (items.length >= 2) {
+        // Dragging finger right-to-left moves forward to higher index books
+        focus = dragStartFocus - dx / geo.pitch;
+        paint();
+      }
+      const now = performance.now();
+      velocitySamples.push({ x: e.clientX, t: now });
+      while (velocitySamples.length > 2 && now - velocitySamples[0].t > 95) {
+        velocitySamples.shift();
+      }
+    });
+
+    const endDrag = (e, cancelled) => {
+      if (dragPointerId !== e.pointerId) return;
+      const wasHorizontal = dragLocked === 'h';
+      const wasMoved = dragMoved;
+      dragPointerId = null;
+      dragLocked = null;
+      stage.classList.remove('dragging');
+      try {
+        if (stage.hasPointerCapture(e.pointerId)) stage.releasePointerCapture(e.pointerId);
+      } catch {}
+
+      if (!wasMoved && !cancelled) {
+        hapticArmed = false;
+        const vol = e.target && e.target.closest ? e.target.closest('.book-vol') : null;
+        if (vol && vol.dataset.slot !== undefined) {
+          handleTapOnSlot(Number(vol.dataset.slot));
+        }
+        return;
+      }
+
+      if (wasHorizontal && items.length >= 2) {
+        let velPx = 0;
+        if (velocitySamples.length >= 2) {
+          const first = velocitySamples[0];
+          const last = velocitySamples[velocitySamples.length - 1];
+          const dt = (last.t - first.t) / 1000;
+          if (dt > 0.005) {
+            velPx = -(last.x - first.x) / dt;
+          }
+        }
+        startPhysicsScroll(clamp(velPx, -2800, 2800));
+      } else {
+        hapticArmed = false;
+      }
+    };
+
+    stage.addEventListener('pointerup', (e) => endDrag(e, false));
+    stage.addEventListener('pointercancel', (e) => endDrag(e, true));
+
+    // Horizontal trackpad / shift-wheel flick support on desktop
+    let wheelTimer = null;
+    stage.addEventListener(
+      'wheel',
+      (e) => {
+        if (items.length < 2 || !geo) return;
+        const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0;
+        if (!delta) return;
+        e.preventDefault();
+        finishEntrance();
+        stopAnim();
+        focus += delta / (geo.pitch * 2.2);
+        paint();
+        clearTimeout(wheelTimer);
+        wheelTimer = setTimeout(() => startPhysicsScroll(0), 110);
+      },
+      { passive: false }
+    );
+
+    stage.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        stepBy(-1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        stepBy(1);
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleTapOnSlot(Math.round(focus));
+      }
+    });
+
+    document.getElementById('shelfPrevBtn')?.addEventListener('click', () => stepBy(-1));
+    document.getElementById('shelfNextBtn')?.addEventListener('click', () => stepBy(1));
+
+    window.addEventListener(
+      'resize',
+      () => {
+        if (state.viewMode === 'shelf' && items.length > 0) {
+          measure();
+          poolNodes.forEach((n) => (n._boundKey = ''));
+          paint();
+        }
+      },
+      { passive: true }
+    );
+  }
+
+  function setItems(nextItems, { resetFocus = false } = {}) {
+    initEvents();
+    const prevActiveId = items.length ? items[mod(Math.round(focus), items.length)]?.id : null;
+    items = Array.isArray(nextItems) ? nextItems : [];
+    lastActiveModIdx = -1;
+    poolNodes.forEach((n) => (n._boundKey = ''));
+
+    if (!items.length) {
+      stopAnim();
+      ensurePool(0);
+      updateActiveReadout(true);
+      return;
+    }
+
+    measure();
+    if (resetFocus || items.length < 2) {
+      focus = 0;
+      playEntrance();
+    } else if (prevActiveId !== null) {
+      const idx = items.findIndex((x) => x.id === prevActiveId);
+      if (idx >= 0) {
+        // Keep current book centered across background 60s refreshes
+        focus = idx;
+      } else {
+        focus = 0;
+      }
+      entrance = 1;
+      paint();
+    } else {
+      focus = 0;
+      playEntrance();
+    }
+    updateActiveReadout(true);
+  }
+
+  function refreshActiveDetail() {
+    if (state.viewMode === 'shelf' && items.length > 0) {
+      poolNodes.forEach((n) => (n._boundKey = ''));
+      paint();
+      updateActiveReadout(true);
+    }
+  }
+
+  return { setItems, stepBy, refreshActiveDetail };
+})();
+
+function updateViewModeUI() {
+  const btn = document.getElementById('viewModeBtn');
+  if (!btn) return;
+  const isShelf = state.viewMode === 'shelf';
+  btn.classList.toggle('is-shelf', isShelf);
+  btn.innerHTML = isShelf ? ICONS.grid : ICONS.shelf;
+  btn.title = isShelf ? '切换为传统卡片列表' : '切换为 3D 翻书架视图';
+  btn.setAttribute('aria-label', btn.title);
+}
+
+function renderFilteredLocal({ resetShelfFocus = false } = {}) {
   const grid = document.getElementById('activitiesGrid');
+  const shelfSec = document.getElementById('shelfSection');
   const items = sortItemsLocally(filterItemsLocally(state.allItems));
+  updateViewModeUI();
+
   if (!items.length) {
+    shelfSec.classList.add('hidden');
+    grid.classList.remove('hidden');
     const hint = state.onlyEligible
       ? '暂无符合你所设身份与条件的活动（可点击顶部「我的身份」调整或关闭「只看我能报」）'
       : '暂无符合条件的活动';
     grid.innerHTML = `<div class="empty-box">${hint}</div>`;
     return;
   }
-  grid.innerHTML = items.map(renderCard).join('');
+
+  if (state.viewMode === 'shelf') {
+    grid.classList.add('hidden');
+    shelfSec.classList.remove('hidden');
+    ArchiveWaveShelf.setItems(items, { resetFocus: resetShelfFocus });
+  } else {
+    shelfSec.classList.add('hidden');
+    grid.classList.remove('hidden');
+    grid.innerHTML = items.map(renderCard).join('');
+  }
 }
 
 function applyMetaToDom() {
@@ -921,22 +1606,22 @@ document.getElementById('tagBar').addEventListener('click', (e) => {
   if (!btn) return;
   state.tagId = btn.dataset.tagId || '';
   renderTagBar();
-  renderFilteredLocal();
+  renderFilteredLocal({ resetShelfFocus: true });
 });
 
 document.getElementById('sourceFilter').addEventListener('change', (e) => {
   state.source = e.target.value;
-  renderFilteredLocal();
+  renderFilteredLocal({ resetShelfFocus: true });
 });
 
 document.getElementById('audienceFilter').addEventListener('change', (e) => {
   state.audienceFilter = e.target.value;
-  renderFilteredLocal();
+  renderFilteredLocal({ resetShelfFocus: true });
 });
 
 document.getElementById('sortSelect').addEventListener('change', (e) => {
   state.sortBy = e.target.value || 'smart';
-  renderFilteredLocal();
+  renderFilteredLocal({ resetShelfFocus: true });
 });
 
 document.getElementById('onlyEligibleCheck').addEventListener('change', (e) => {
@@ -948,12 +1633,20 @@ document.getElementById('onlyEligibleCheck').addEventListener('change', (e) => {
   }
   state.onlyEligible = want;
   saveProfile();
-  renderFilteredLocal();
+  renderFilteredLocal({ resetShelfFocus: true });
 });
 
 document.getElementById('hideEndedCheck').addEventListener('change', (e) => {
   state.hideEnded = e.target.checked;
-  renderFilteredLocal();
+  renderFilteredLocal({ resetShelfFocus: true });
+});
+
+document.getElementById('viewModeBtn').addEventListener('click', () => {
+  state.viewMode = state.viewMode === 'shelf' ? 'grid' : 'shelf';
+  try {
+    localStorage.setItem(VIEW_MODE_KEY, state.viewMode);
+  } catch {}
+  renderFilteredLocal({ resetShelfFocus: state.viewMode === 'shelf' });
 });
 
 /* ==================== 我的身份设置弹窗 ==================== */
@@ -991,7 +1684,7 @@ document.getElementById('profSaveBtn').addEventListener('click', () => {
   saveProfile();
   updateProfileButtonUI();
   closeProfileModal();
-  renderFilteredLocal();
+  renderFilteredLocal({ resetShelfFocus: true });
 });
 
 document.getElementById('profResetBtn').addEventListener('click', () => {
@@ -1000,7 +1693,7 @@ document.getElementById('profResetBtn').addEventListener('click', () => {
   saveProfile();
   updateProfileButtonUI();
   closeProfileModal();
-  renderFilteredLocal();
+  renderFilteredLocal({ resetShelfFocus: true });
 });
 
 let searchTimer = null;
@@ -1008,17 +1701,20 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     state.q = e.target.value.trim();
-    renderFilteredLocal();
+    renderFilteredLocal({ resetShelfFocus: true });
   }, 150);
 });
 
-document.getElementById('activitiesGrid').addEventListener('click', (e) => {
+function handleRemindClick(e) {
   const btn = e.target.closest('[data-remind-id]');
   if (!btn) return;
   const id = Number(btn.dataset.remindId);
   const item = state.allItems.find((a) => a.id === id);
   if (item) openRemindModal(item);
-});
+}
+
+document.getElementById('activitiesGrid').addEventListener('click', handleRemindClick);
+document.getElementById('shelfActiveCard').addEventListener('click', handleRemindClick);
 
 document.getElementById('refreshBtn').addEventListener('click', refreshAll);
 document.getElementById('retryOnlineBtn').addEventListener('click', refreshAll);
@@ -1035,13 +1731,14 @@ backTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smo
 loadReminders();
 loadProfile();
 updateProfileButtonUI();
+updateViewModeUI();
 const initialCached = loadSnapshotFromCache();
 if (initialCached) {
   state.meta = initialCached.meta;
   state.allItems = initialCached.allItems;
   state.lastSyncedAt = initialCached.cachedAt;
   applyMetaToDom();
-  renderFilteredLocal();
+  renderFilteredLocal({ resetShelfFocus: true });
 }
 
 refreshAll();
@@ -1049,11 +1746,13 @@ refreshAll();
 // 每秒更新倒计时胶囊 & 检查到点的静音振动提醒
 setInterval(() => {
   for (const item of state.allItems) {
-    const el = document.querySelector(`[data-reg-pill="${item.id}"]`);
-    if (!el) continue;
+    const els = document.querySelectorAll(`[data-reg-pill="${item.id}"]`);
+    if (!els.length) continue;
     const st = getRegistrationStatus(item);
-    el.className = `reg-pill ${st.kind}`;
-    el.textContent = st.label;
+    els.forEach((el) => {
+      el.className = `reg-pill ${st.kind}`;
+      el.textContent = st.label;
+    });
   }
   checkDueReminders();
 }, 1000);
