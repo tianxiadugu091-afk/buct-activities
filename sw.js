@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'buct-hub-shell-v10';
+const SHELL_CACHE = 'buct-hub-shell-v11';
 const SHELL_ASSETS = ['./', './index.html', './styles.css', './home.css', './app.js', './manifest.json'];
 
 self.addEventListener('install', (event) => {
