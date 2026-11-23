@@ -36,7 +36,6 @@
           <span class="profile-dot" id="profileDot"></span>
           <span id="profileBtnText">👤 我的身份</span>
         </button>
-        <button class="icon-btn view-mode-btn" id="viewModeBtn" type="button" title="切换 3D 翻书架 / 卡片网格视图" aria-label="切换视图模式"></button>
         <span class="fresh-dot-pill" id="livePill" title="数据更新状态">
           <span class="live-dot"></span>
           <span id="liveStatusText">同步中</span>
@@ -95,24 +94,6 @@
     </div>
 
     <div id="reminderToast" class="reminder-toast hidden" role="alert"></div>
-
-    <!-- Wenku8 风格 3D 翻书架卡片视图（手机默认开启，电脑可一键切换） -->
-    <section id="shelfSection" class="shelf-section hidden" aria-label="活动翻书架视图">
-      <div class="shelf-bank">
-        <div class="shelf-stage" id="shelfStage" tabindex="0" role="region" aria-label="左右滑动翻动活动书架">
-          <div class="shelf-pool" id="shelfPool"></div>
-        </div>
-        <div class="shelf-pager" id="shelfPager">
-          <span class="shelf-hint">← 左右轻滑翻书 · 点选侧边居中 · 点中心开推文 →</span>
-          <div class="shelf-pager-controls">
-            <button type="button" class="shelf-step-btn" id="shelfPrevBtn" aria-label="上一份活动">‹</button>
-            <span class="shelf-counter" id="shelfCounter">01 / 01</span>
-            <button type="button" class="shelf-step-btn" id="shelfNextBtn" aria-label="下一份活动">›</button>
-          </div>
-        </div>
-        <div id="shelfActiveCard" class="shelf-active-card"></div>
-      </div>
-    </section>
 
     <section id="activitiesGrid" class="cards-grid" aria-live="polite">
       <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
