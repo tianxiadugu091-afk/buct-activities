@@ -47,6 +47,11 @@
   <div class="filter-bar">
     <div class="container filter-inner">
       <div class="chip-row" id="tagBar"></div>
+      <button type="button" class="mobile-filter-btn" id="mobileFilterBtn" aria-label="展开筛选与排序" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v5l-4 2v-7L3 5z"/></svg>
+        <span>筛选</span>
+        <span class="mf-badge hidden" id="mobileFilterBadge">0</span>
+      </button>
       <div class="filter-right">
         <label class="toggle-ended" title="隐藏报名已截止或活动已结束的条目">
           <input type="checkbox" id="hideEndedCheck" />
@@ -91,6 +96,7 @@
       <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
       <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
       <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
+      <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
     </section>
   </main>
 
@@ -100,6 +106,75 @@
       <a href="/admin" class="admin-quiet-link">管理</a>
     </div>
   </footer>
+
+  <!-- 移动端底部筛选抽屉（方案 C） -->
+  <div id="filterSheet" class="sheet-backdrop" aria-hidden="true">
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="fsTitle">
+      <div class="sheet-handle-area" data-sheet-close="filterSheet"><span class="sheet-handle"></span></div>
+      <div class="sheet-head">
+        <h3 id="fsTitle">筛选与排序</h3>
+        <button type="button" class="icon-btn sheet-close-btn" data-sheet-close="filterSheet" aria-label="关闭筛选">✕</button>
+      </div>
+      <div class="sheet-body">
+        <div class="fs-section">
+          <div class="fs-label">排序方式</div>
+          <div class="fs-pills" id="fsSortPills">
+            <button type="button" class="fs-pill" data-sort="smart">智能排序</button>
+            <button type="button" class="fs-pill" data-sort="latest">最新发布</button>
+            <button type="button" class="fs-pill" data-sort="deadline">最快截止</button>
+          </div>
+        </div>
+
+        <div class="fs-section">
+          <div class="fs-label">面向人群</div>
+          <div class="fs-pills" id="fsAudiencePills">
+            <button type="button" class="fs-pill" data-audience="">全部人群</button>
+            <button type="button" class="fs-pill" data-audience="all">全校可报</button>
+            <button type="button" class="fs-pill" data-audience="undergrad">本科生可报</button>
+            <button type="button" class="fs-pill" data-audience="freshman">大一新生</button>
+            <button type="button" class="fs-pill" data-audience="grad">研究生</button>
+            <button type="button" class="fs-pill" data-audience="college">限指定学院</button>
+            <button type="button" class="fs-pill" data-audience="club">社团内部</button>
+          </div>
+        </div>
+
+        <div class="fs-section">
+          <div class="fs-label">来源公众号</div>
+          <div class="select-wrap fs-select-wrap">
+            <select id="fsSourceSelect" aria-label="按来源公众号筛选">
+              <option value="">全部公众号</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="fs-switch-row" for="fsHideEndedCheck">
+          <div>
+            <div class="fs-switch-title">隐藏已结束活动</div>
+            <div class="fs-switch-sub">过滤掉报名已截止或活动已结束的条目</div>
+          </div>
+          <input type="checkbox" id="fsHideEndedCheck" class="fs-checkbox" />
+        </label>
+      </div>
+      <div class="sheet-foot">
+        <button type="button" class="sheet-btn sheet-btn-ghost" id="fsResetBtn">重置</button>
+        <button type="button" class="sheet-btn sheet-btn-primary" id="fsDoneBtn">查看结果</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 活动详情半屏抽屉（方案 A） -->
+  <div id="detailSheet" class="sheet-backdrop" aria-hidden="true">
+    <div class="sheet-panel detail-sheet-panel" id="detailSheetPanel" role="dialog" aria-modal="true" aria-labelledby="dsTitle">
+      <div class="ds-accent-bar" id="dsAccentBar"></div>
+      <div class="sheet-handle-area" data-sheet-close="detailSheet"><span class="sheet-handle"></span></div>
+      <div class="sheet-head ds-head">
+        <div class="ds-head-left" id="dsHeadMeta"></div>
+        <button type="button" class="icon-btn sheet-close-btn" data-sheet-close="detailSheet" aria-label="关闭详情">✕</button>
+      </div>
+      <div class="sheet-body" id="dsBody"></div>
+      <div class="sheet-foot" id="dsFoot"></div>
+    </div>
+  </div>
 
   <!-- 静音报名提醒弹窗 -->
   <div id="remindModal" class="rm-backdrop hidden">
