@@ -939,10 +939,404 @@ html[data-theme='dark'] .remind-btn.armed {
   pointer-events: auto;
 }
 
+/* =====================================================================
+   Wenku8 风格 3D 翻书架卡片视图（等轴测波浪抽书 + 物理无回弹落槽）
+   ===================================================================== */
+.view-mode-btn.is-shelf {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+}
+
+.shelf-section {
+  max-width: 540px;
+  margin: 0 auto 8px;
+}
+
+.shelf-bank {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shelf-stage {
+  position: relative;
+  width: 100%;
+  height: 368px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: radial-gradient(
+      120% 85% at 50% 100%,
+      rgba(138, 128, 107, 0.12) 0%,
+      rgba(138, 128, 107, 0.03) 48%,
+      transparent 80%
+    ),
+    var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+  outline: none;
+}
+
+html[data-theme='dark'] .shelf-stage {
+  background: radial-gradient(
+      120% 85% at 50% 100%,
+      rgba(99, 102, 241, 0.16) 0%,
+      rgba(15, 23, 42, 0.2) 55%,
+      transparent 82%
+    ),
+    var(--surface);
+}
+
+.shelf-stage.dragging {
+  cursor: grabbing;
+}
+
+.shelf-pool {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+}
+
+/* 单个 3D 立体活动书卷（三个共享数学顶点的物理平面） */
+.book-vol {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  will-change: transform;
+  contain: layout style;
+}
+
+.book-shadow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  background: linear-gradient(215deg, rgba(138, 128, 107, 0.15) 0%, rgba(138, 128, 107, 0) 78%);
+}
+
+html[data-theme='dark'] .book-shadow {
+  background: linear-gradient(215deg, rgba(248, 250, 252, 0.11) 0%, rgba(0, 0, 0, 0) 78%);
+}
+
+.book-cover,
+.book-cap,
+.book-spine {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  box-sizing: border-box;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* 右侧倾斜封面面 */
+.book-cover {
+  background: #faf8f2;
+  border: 1px solid rgba(138, 128, 107, 0.28);
+  border-left: none;
+  padding: 10px 10px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: inset -6px 0 14px rgba(138, 128, 107, 0.08);
+}
+
+html[data-theme='dark'] .book-cover {
+  background: #17223a;
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: inset -6px 0 14px rgba(0, 0, 0, 0.25);
+}
+
+.book-cover::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--book-accent, #4f46e5);
+}
+
+.book-cover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.book-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+
+.book-cover-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1.5px 5.5px;
+  border-radius: 4px;
+  color: var(--book-accent, #4f46e5);
+  background: color-mix(in srgb, var(--book-accent, #4f46e5) 13%, transparent);
+  white-space: nowrap;
+  max-width: 78px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.book-cover-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 8px 7px;
+  border-radius: 7px;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--book-accent, #4f46e5) 11%, #ffffff) 0%,
+    #ffffff 55%,
+    color-mix(in srgb, var(--book-accent, #4f46e5) 5%, #f7f4ec) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--book-accent, #4f46e5) 20%, rgba(138, 128, 107, 0.2));
+}
+
+html[data-theme='dark'] .book-cover-card {
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--book-accent, #4f46e5) 22%, #131c31) 0%,
+    #11192c 60%,
+    #0e1526 100%
+  );
+  border-color: color-mix(in srgb, var(--book-accent, #4f46e5) 32%, rgba(148, 163, 184, 0.2));
+}
+
+.book-cover-title {
+  font-size: 13px;
+  font-weight: 780;
+  line-height: 1.32;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.book-cover-meta {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.book-cover-aud {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.book-cover-status {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1.5px 6px;
+  border-radius: 999px;
+}
+
+.book-cover-status.urgent { color: #dc2626; background: rgba(239, 68, 68, 0.14); }
+.book-cover-status.upcoming { color: #2563eb; background: rgba(37, 99, 235, 0.14); }
+.book-cover-status.open { color: #059669; background: rgba(16, 185, 129, 0.15); }
+.book-cover-status.ended,
+.book-cover-status.unknown { color: var(--text-3); background: rgba(148, 163, 184, 0.16); }
+
+.book-cover-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 9.5px;
+  color: var(--text-3);
+  border-top: 1px dashed rgba(138, 128, 107, 0.26);
+  padding-top: 4px;
+}
+
+.book-cover-src {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+/* 顶部书页切面 */
+.book-cap {
+  background: linear-gradient(90deg, #e5e0d4 0%, #faf8f2 100%);
+  border: 0.5px solid rgba(154, 146, 127, 0.34);
+  cursor: pointer;
+}
+
+html[data-theme='dark'] .book-cap {
+  background: linear-gradient(90deg, #273552 0%, #1c2842 100%);
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+/* 左侧竖排书脊面 */
+.book-spine {
+  background: #f2efe6;
+  border: 1px solid rgba(138, 128, 107, 0.32);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 1px 7px;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: inset -2px 0 4px rgba(138, 128, 107, 0.14);
+}
+
+html[data-theme='dark'] .book-spine {
+  background: #1f2c47;
+  border-color: rgba(148, 163, 184, 0.24);
+  box-shadow: inset -2px 0 4px rgba(0, 0, 0, 0.35);
+}
+
+.book-spine::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--book-accent, #4f46e5);
+}
+
+.book-spine-num {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--text-3);
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.book-spine-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.12;
+  color: var(--text);
+  text-align: center;
+  padding: 4px 0;
+  overflow: hidden;
+}
+
+.book-spine-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--book-accent, #4f46e5);
+  flex-shrink: 0;
+}
+
+.book-vol.is-focused .book-spine {
+  border-color: color-mix(in srgb, var(--book-accent, #4f46e5) 55%, rgba(138, 128, 107, 0.35));
+}
+
+.book-vol.is-focused .book-cover {
+  border-color: color-mix(in srgb, var(--book-accent, #4f46e5) 50%, rgba(138, 128, 107, 0.32));
+}
+
+.book-vol.is-ended .book-cover-card,
+.book-vol.is-ended .book-spine-title {
+  opacity: 0.62;
+}
+
+/* 书架下方翻页控制条 */
+.shelf-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 4px;
+}
+
+.shelf-hint {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.shelf-pager-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.shelf-step-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.shelf-step-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.shelf-counter {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
+  min-width: 52px;
+  text-align: center;
+}
+
+/* 书架下方当前聚焦活动完整卡片 */
+.shelf-active-card .act-card {
+  box-shadow: var(--shadow-hover);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+}
+
+.shelf-active-card .act-card:hover {
+  transform: none;
+}
+
 /* ---------- 移动端适配 ---------- */
 @media (max-width: 720px) {
   body.home .container {
     padding: 0 12px;
+  }
+  .topbar-inner {
+    gap: 8px;
   }
   .brand-name,
   #liveStatusText {
@@ -951,13 +1345,38 @@ html[data-theme='dark'] .remind-btn.armed {
   .fresh-dot-pill {
     padding: 7px;
   }
+  .profile-btn {
+    padding: 0 9px;
+    font-size: 12px;
+  }
+  .filter-bar {
+    padding: 8px 0;
+  }
   .filter-inner {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: 7px;
   }
   .filter-right {
-    justify-content: space-between;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    justify-content: flex-start;
+    padding-bottom: 1px;
+  }
+  .filter-right::-webkit-scrollbar {
+    display: none;
+  }
+  .select-wrap {
+    flex-shrink: 0;
+  }
+  .select-wrap select {
+    min-width: 96px;
+    height: 30px;
+    font-size: 12px;
+  }
+  .main-area {
+    padding-top: 12px;
   }
   .cards-grid {
     grid-template-columns: 1fr;
