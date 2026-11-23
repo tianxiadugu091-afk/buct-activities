@@ -1,6 +1,9 @@
 const CACHE_KEY = 'wah_public_snapshot_v2';
 const REMIND_KEY = 'wah_silent_reminders_v1';
+const SAVED_KEY = 'wah_saved_v1';
+const VIEW_MODE_KEY = 'wah_view_mode_v1';
 const THEME_KEY = 'wah_theme';
+const HUB_PUBLIC_URL = 'https://tianxiadugu091-afk.github.io/buct-activities/';
 const IS_STATIC_HOST =
   window.location.protocol === 'file:' ||
   /\.(github\.io|pages\.dev|vercel\.app|netlify\.app|gitee\.io)$/i.test(window.location.hostname);
@@ -12,17 +15,69 @@ const state = {
   sortBy: 'smart',
   q: '',
   hideEnded: false,
+  onlySaved: false,
+  viewMode: 'grid', // 'grid' | 'deck'
+  deckIndex: 0,
   meta: null,
   allItems: [],
+  renderedItems: [],
   isOfflineCache: false,
   isStaticMirror: IS_STATIC_HOST,
   lastSyncedAt: null,
   reminders: {}, // { [activityId]: { atMs, title, url, fired } }
+  savedIds: new Set(),
   editingRemindItem: null,
   activeDetailId: null,
+  posterItem: null,
+  posterDataUrl: '',
 };
 
 /* ==================== 工具函数 ==================== */
+function haptic(ms = 10) {
+  try {
+    if (navigator.vibrate) navigator.vibrate(ms);
+  } catch {}
+}
+
+function loadSavedIds() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]');
+    state.savedIds = new Set(Array.isArray(arr) ? arr.map(Number).filter(Number.isFinite) : []);
+  } catch {
+    state.savedIds = new Set();
+  }
+}
+
+function persistSavedIds() {
+  try {
+    localStorage.setItem(SAVED_KEY, JSON.stringify([...state.savedIds]));
+  } catch {}
+}
+
+function loadViewMode() {
+  try {
+    const v = localStorage.getItem(VIEW_MODE_KEY);
+    if (v === 'grid' || v === 'deck') state.viewMode = v;
+  } catch {}
+}
+
+function persistViewMode() {
+  try {
+    localStorage.setItem(VIEW_MODE_KEY, state.viewMode);
+  } catch {}
+}
+
+function updateViewModeButtonUI() {
+  const btn = document.getElementById('viewModeBtn');
+  if (!btn) return;
+  const isDeck = state.viewMode === 'deck';
+  btn.classList.toggle('view-deck-active', isDeck);
+  btn.title = isDeck ? '切回双列卡片墙' : '切换沉浸横滑翻卡';
+  btn.setAttribute('aria-label', btn.title);
+  btn.innerHTML = isDeck
+    ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>'
+    : '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="16" rx="2.5"/><path d="M2 7v10"/><path d="M22 7v10"/></svg>';
+}
 function escapeHtml(str) {
   return String(str || '')
     .replace(/&/g, '&amp;')
@@ -418,6 +473,7 @@ function filterItemsLocally(items) {
 
   return (items || []).filter((item) => {
     const regSt = getRegistrationStatus(item);
+    if (state.onlySaved && !state.savedIds.has(item.id)) return false;
     if (state.hideEnded && regSt.ended) return false;
     if (state.audienceFilter && !matchesAudienceQuickFilter(item, state.audienceFilter)) return false;
     if (state.tagId && !(item.tags || []).some((t) => String(t.id) === String(state.tagId))) return false;
@@ -480,13 +536,24 @@ function sortItemsLocally(items) {
   return arr;
 }
 
-function renderCard(item) {
+function isHotItem(regSt) {
+  if (!regSt || regSt.ended) return false;
+  if (regSt.kind === 'urgent') return true;
+  if (regSt.kind === 'upcoming' && regSt.targetMs && regSt.targetMs - Date.now() <= 24 * 3600 * 1000) {
+    return true;
+  }
+  return false;
+}
+
+function getItemDisplayInfo(item) {
   const primary = (item.tags || [])[0];
   const accent = safeColor(primary?.color);
   const regSt = getRegistrationStatus(item);
+  const isHot = isHotItem(regSt);
   const isUncertain = Boolean(item.is_uncertain) || (item.tags || []).some((t) => /存疑/.test(t.name));
   const rem = state.reminders[item.id];
   const isArmed = Boolean(rem && !rem.fired);
+  const isSaved = state.savedIds.has(item.id);
   const aud = getAudienceObj(item);
   const audText = item.audience_text || (aud.scope === 'all' ? '全校可报' : '人群详见推文');
 
@@ -512,14 +579,37 @@ function renderCard(item) {
   const pubDisplay = formatMdHm(item.published_at) || '—';
   const creditText =
     item.credit_hint || (isUncertain ? '二课类别存疑 · 可自行联系主办方询问' : '');
-
   const jumpUrl = safeHref(item.source_article_url);
+
+  return {
+    primary,
+    accent,
+    regSt,
+    isHot,
+    isUncertain,
+    isArmed,
+    isSaved,
+    audText,
+    audClass,
+    tagsHtml,
+    regDisplay,
+    pubDisplay,
+    creditText,
+    jumpUrl,
+  };
+}
+
+function renderCard(item, idx = 0, animate = false) {
+  const info = getItemDisplayInfo(item);
+  const { accent, regSt, isHot, isUncertain, isArmed, isSaved, audText, audClass, tagsHtml, regDisplay, pubDisplay, creditText, jumpUrl } = info;
   const linkHtml = jumpUrl
     ? `<a class="act-link" href="${escapeHtml(jumpUrl)}" target="_blank" rel="noopener noreferrer">原推文 ↗</a>`
     : '';
+  const enterClass = animate ? 'card-enter' : '';
+  const staggerStyle = animate ? `--i:${Math.min(idx, 10)};` : '';
 
   return `
-    <article class="act-card ${regSt.ended ? 'is-ended' : ''} ${isUncertain ? 'is-uncertain' : ''}" data-card-id="${item.id}" style="--accent:${accent}">
+    <article class="act-card ${regSt.ended ? 'is-ended' : ''} ${isUncertain ? 'is-uncertain' : ''} ${isHot ? 'is-hot' : ''} ${enterClass}" data-card-id="${item.id}" style="${staggerStyle}--accent:${accent}">
       <div class="act-body">
         <div class="act-top">
           <div class="act-tags">${tagsHtml}</div>
@@ -570,8 +660,16 @@ function renderCard(item) {
           )}</div>
           <span class="src-name">${escapeHtml(item.source_account_name)}</span>
         </div>
-        <span class="card-mobile-cue ${isArmed ? 'armed' : ''}">${isArmed ? '🔔' : '详情 ›'}</span>
+        <div class="card-mobile-actions">
+          <button type="button" class="card-mobile-star ${isSaved ? 'saved' : ''}" data-star-id="${item.id}" aria-label="${
+            isSaved ? '取消收藏' : '收藏到待抢清单'
+          }">${isSaved ? '★' : '☆'}</button>
+          <span class="card-mobile-cue ${isArmed ? 'armed' : ''}">${isArmed ? '🔔' : '详情 ›'}</span>
+        </div>
         <div class="foot-actions">
+          <button type="button" class="star-btn ${isSaved ? 'saved' : ''}" data-star-id="${item.id}" title="${
+            isSaved ? '移出待抢清单' : '加入待抢清单'
+          }">${isSaved ? '★' : '☆'}</button>
           <button type="button" class="remind-btn ${isArmed ? 'armed' : ''}" data-remind-id="${item.id}" title="设置静音振动提醒（上课不响铃）">
             ${isArmed ? '✓ 已提醒' : '🔔 提醒'}
           </button>
@@ -580,6 +678,160 @@ function renderCard(item) {
       </footer>
     </article>
   `;
+}
+
+function renderDeckCard(item, idx, activeIdx) {
+  const info = getItemDisplayInfo(item);
+  const { accent, regSt, isHot, isUncertain, isArmed, isSaved, audText, audClass, tagsHtml, regDisplay, pubDisplay, creditText, jumpUrl } = info;
+  return `
+    <article class="deck-card ${isHot ? 'is-hot' : ''} ${idx === activeIdx ? 'is-active' : ''}" data-deck-index="${idx}" data-card-id="${item.id}" style="--accent:${accent}">
+      <div class="deck-hero">
+        <div class="deck-hero-top">
+          <div class="act-tags">${tagsHtml}</div>
+          <span class="reg-pill ${regSt.kind}" data-reg-pill="${item.id}">${escapeHtml(regSt.label)}</span>
+        </div>
+        <h2 class="deck-title">${escapeHtml(item.title)}</h2>
+      </div>
+      <div class="deck-body">
+        <div class="audience-row">
+          <span class="audience-badge ${audClass}">👥 面向人群：${escapeHtml(audText)}</span>
+        </div>
+        ${
+          creditText
+            ? `<div class="ds-credit-card ${isUncertain ? 'uncertain' : ''}">${
+                isUncertain ? '⚠️ ' : '✦ '
+              }${escapeHtml(creditText)}</div>`
+            : ''
+        }
+        <div class="ds-time-card">
+          <div class="time-row">
+            <span class="time-key">报名时间</span>
+            <span class="time-val ${item.reg_time_text || item.reg_start_at || item.reg_end_at ? 'reg-highlight' : 'muted'}">${escapeHtml(
+              regDisplay
+            )}</span>
+          </div>
+          ${
+            item.event_time
+              ? `<div class="time-row"><span class="time-key">活动时间</span><span class="time-val">${escapeHtml(
+                  item.event_time
+                )}</span></div>`
+              : ''
+          }
+          <div class="time-row">
+            <span class="time-key">发布时间</span>
+            <span class="time-val muted">${escapeHtml(pubDisplay)}</span>
+          </div>
+        </div>
+        <div class="act-source" style="margin-top:auto">
+          <div class="avatar" style="${avatarStyle(item.source_account_name)}">${escapeHtml(
+            avatarChar(item.source_account_name)
+          )}</div>
+          <span class="src-name">${escapeHtml(item.source_account_name)}</span>
+        </div>
+      </div>
+      <div class="deck-foot">
+        <button type="button" class="deck-act-btn ${isSaved ? 'saved' : ''}" data-star-id="${item.id}" title="收藏待抢">${
+          isSaved ? '★' : '☆'
+        }</button>
+        <button type="button" class="deck-act-btn ${isArmed ? 'armed' : ''}" data-remind-id="${item.id}" title="静音提醒">${
+          isArmed ? '✓' : '🔔'
+        }</button>
+        <button type="button" class="deck-act-btn" data-poster-id="${item.id}" title="生成分享海报图">🖼</button>
+        ${
+          jumpUrl
+            ? `<a class="deck-act-btn primary" href="${escapeHtml(jumpUrl)}" target="_blank" rel="noopener noreferrer">原推文 ↗</a>`
+            : `<button type="button" class="deck-act-btn primary" data-open-detail-id="${item.id}">看详情</button>`
+        }
+      </div>
+    </article>
+  `;
+}
+
+function renderRadarBar() {
+  const wrap = document.getElementById('radarWrap');
+  const track = document.getElementById('radarTrack');
+  if (!wrap || !track) return;
+  const now = Date.now();
+  const candidates = [];
+  for (const item of state.allItems) {
+    const st = getRegistrationStatus(item);
+    if (st.ended) continue;
+    const withinUpcoming = st.kind === 'upcoming' && st.targetMs && st.targetMs - now <= 48 * 3600 * 1000;
+    const withinOpen = st.kind === 'open' && st.targetMs && st.targetMs - now <= 72 * 3600 * 1000;
+    if (st.kind === 'urgent' || withinUpcoming || withinOpen) {
+      candidates.push({ item, st });
+    }
+  }
+  candidates.sort((a, b) => (a.st.targetMs || Number.MAX_SAFE_INTEGER) - (b.st.targetMs || Number.MAX_SAFE_INTEGER));
+  const top = candidates.slice(0, 6);
+  if (!top.length) {
+    wrap.classList.add('hidden');
+    track.innerHTML = '';
+    return;
+  }
+  wrap.classList.remove('hidden');
+  track.innerHTML = top
+    .map(
+      ({ item, st }) => `
+      <button type="button" class="radar-pill" data-radar-id="${item.id}">
+        <span class="radar-pill-time ${st.kind}" data-radar-time="${item.id}">${escapeHtml(st.label)}</span>
+        <span class="radar-pill-title">${escapeHtml(item.title)}</span>
+      </button>
+    `
+    )
+    .join('');
+}
+
+function updateFavDockUI() {
+  const dock = document.getElementById('favDock');
+  const toggleBtn = document.getElementById('favDockToggle');
+  const countEl = document.getElementById('favDockCount');
+  const textEl = document.getElementById('favDockText');
+  const allBtn = document.getElementById('favDockAllBtn');
+  if (!dock) return;
+
+  const validCount = state.allItems.filter((it) => state.savedIds.has(it.id)).length;
+  if (validCount === 0 && !state.onlySaved) {
+    dock.classList.add('hidden');
+    return;
+  }
+  dock.classList.remove('hidden');
+  countEl.textContent = String(validCount);
+  toggleBtn.classList.toggle('active', state.onlySaved);
+  textEl.textContent = state.onlySaved ? '仅看已收藏' : '待抢清单';
+  allBtn.classList.toggle('hidden', !state.onlySaved);
+}
+
+function updateDeckPagerUI(total) {
+  const counter = document.getElementById('deckCounter');
+  const fill = document.getElementById('deckProgressFill');
+  const prevBtn = document.getElementById('deckPrevBtn');
+  const nextBtn = document.getElementById('deckNextBtn');
+  if (!counter || !total) return;
+  const clamped = Math.max(0, Math.min(state.deckIndex, total - 1));
+  state.deckIndex = clamped;
+  counter.textContent = `${pad2(clamped + 1)} / ${pad2(total)}`;
+  if (fill) fill.style.width = `${Math.max(8, ((clamped + 1) / total) * 100)}%`;
+  if (prevBtn) prevBtn.disabled = clamped <= 0;
+  if (nextBtn) nextBtn.disabled = clamped >= total - 1;
+
+  document.querySelectorAll('#deckTrack .deck-card').forEach((card, i) => {
+    card.classList.toggle('is-active', i === clamped);
+  });
+}
+
+function scrollToDeckIndex(idx) {
+  const track = document.getElementById('deckTrack');
+  if (!track) return;
+  const cards = track.querySelectorAll('.deck-card');
+  if (!cards.length) return;
+  const targetIdx = Math.max(0, Math.min(idx, cards.length - 1));
+  const target = cards[targetIdx];
+  if (!target) return;
+  state.deckIndex = targetIdx;
+  const left = target.offsetLeft - (track.clientWidth - target.clientWidth) / 2;
+  track.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+  updateDeckPagerUI(cards.length);
 }
 
 function syncFilterControlsUI(matchedCount) {
@@ -624,15 +876,45 @@ function syncFilterControlsUI(matchedCount) {
   }
 }
 
-function renderFilteredLocal() {
+function renderFilteredLocal(opts = {}) {
+  const animate = Boolean(opts.animate);
   const grid = document.getElementById('activitiesGrid');
+  const deckStage = document.getElementById('deckStage');
+  const deckTrack = document.getElementById('deckTrack');
+  const deckPager = document.getElementById('deckPager');
   const items = sortItemsLocally(filterItemsLocally(state.allItems));
+  state.renderedItems = items;
+
   syncFilterControlsUI(items.length);
-  if (!items.length) {
-    grid.innerHTML = '<div class="empty-box">暂无符合条件的活动</div>';
-    return;
+  renderRadarBar();
+  updateFavDockUI();
+
+  const emptyMsg = state.onlySaved
+    ? '待抢清单暂时为空，点击卡片上的 ☆ 即可收藏'
+    : '暂无符合条件的活动';
+
+  if (state.viewMode === 'deck') {
+    grid.classList.add('hidden');
+    deckStage.classList.remove('hidden');
+    if (!items.length) {
+      deckTrack.innerHTML = `<div class="empty-box" style="width:100%">${emptyMsg}</div>`;
+      if (deckPager) deckPager.classList.add('hidden');
+    } else {
+      if (deckPager) deckPager.classList.remove('hidden');
+      if (state.deckIndex >= items.length) state.deckIndex = 0;
+      deckTrack.innerHTML = items.map((it, i) => renderDeckCard(it, i, state.deckIndex)).join('');
+      updateDeckPagerUI(items.length);
+    }
+  } else {
+    deckStage.classList.add('hidden');
+    grid.classList.remove('hidden');
+    if (!items.length) {
+      grid.innerHTML = `<div class="empty-box">${emptyMsg}</div>`;
+    } else {
+      grid.innerHTML = items.map((it, i) => renderCard(it, i, animate)).join('');
+    }
   }
-  grid.innerHTML = items.map(renderCard).join('');
+
   if (state.activeDetailId !== null) {
     const current = state.allItems.find((a) => a.id === state.activeDetailId);
     if (current) renderDetailSheetContent(current);
@@ -1010,6 +1292,14 @@ function renderDetailSheetContent(item) {
         <div class="ds-source-article">原推文：《${escapeHtml(item.source_article_title || item.title)}》</div>
       </div>
     </div>
+    <div class="ds-quick-tools">
+      <button type="button" class="ds-tool-chip ${state.savedIds.has(item.id) ? 'saved' : ''}" data-star-id="${item.id}">
+        ${state.savedIds.has(item.id) ? '★ 已在待抢清单' : '☆ 收藏到待抢'}
+      </button>
+      <button type="button" class="ds-tool-chip" data-poster-id="${item.id}">
+        🖼 生成分享海报
+      </button>
+    </div>
   `;
 
   document.getElementById('dsFoot').innerHTML = `
@@ -1026,10 +1316,512 @@ function renderDetailSheetContent(item) {
   `;
 }
 
+/* ==================== 纯前端二维码 + 分享海报图生成 ==================== */
+function makeQrMatrix(text) {
+  const bytes = Array.from(new TextEncoder().encode(String(text || '')));
+  const SPECS = [
+    { v: 1, size: 21, dataCw: 19, ec: 7, blocks: 1, align: [] },
+    { v: 2, size: 25, dataCw: 34, ec: 10, blocks: 1, align: [6, 18] },
+    { v: 3, size: 29, dataCw: 55, ec: 15, blocks: 1, align: [6, 22] },
+    { v: 4, size: 33, dataCw: 80, ec: 20, blocks: 1, align: [6, 26] },
+    { v: 5, size: 37, dataCw: 108, ec: 26, blocks: 1, align: [6, 30] },
+    { v: 6, size: 41, dataCw: 136, ec: 18, blocks: 2, align: [6, 34] },
+  ];
+  const spec = SPECS.find((s) => bytes.length <= s.dataCw - 2);
+  if (!spec) return null;
+
+  // 1. Bit stream: Byte mode (0100) + 8-bit length + UTF-8 bytes + terminator + pad
+  const bits = [];
+  const pushBits = (val, len) => {
+    for (let i = len - 1; i >= 0; i--) bits.push((val >> i) & 1);
+  };
+  pushBits(0b0100, 4);
+  pushBits(bytes.length, 8);
+  for (const b of bytes) pushBits(b, 8);
+  const maxBits = spec.dataCw * 8;
+  for (let i = 0; i < 4 && bits.length < maxBits; i++) bits.push(0);
+  while (bits.length % 8 !== 0) bits.push(0);
+  const dataBytes = [];
+  for (let i = 0; i < bits.length; i += 8) {
+    let v = 0;
+    for (let j = 0; j < 8; j++) v = (v << 1) | bits[i + j];
+    dataBytes.push(v);
+  }
+  const padSeq = [0xec, 0x11];
+  let pi = 0;
+  while (dataBytes.length < spec.dataCw) {
+    dataBytes.push(padSeq[pi % 2]);
+    pi += 1;
+  }
+
+  // 2. Reed-Solomon GF(256)
+  const gfMul = (a, b) => {
+    let r = 0;
+    let x = a;
+    let y = b;
+    while (y > 0) {
+      if (y & 1) r ^= x;
+      x = (x << 1) ^ (x & 0x80 ? 0x11d : 0);
+      y >>= 1;
+    }
+    return r;
+  };
+  let gen = [1];
+  let root = 1;
+  for (let i = 0; i < spec.ec; i++) {
+    const next = new Array(gen.length + 1).fill(0);
+    for (let j = 0; j < gen.length; j++) {
+      next[j] ^= gen[j];
+      next[j + 1] ^= gfMul(gen[j], root);
+    }
+    gen = next;
+    root = gfMul(root, 2);
+  }
+  const rsEncode = (chunk) => {
+    const rem = new Array(spec.ec).fill(0);
+    for (const b of chunk) {
+      const factor = b ^ rem[0];
+      rem.shift();
+      rem.push(0);
+      for (let j = 0; j < spec.ec; j++) rem[j] ^= gfMul(gen[j + 1], factor);
+    }
+    return rem;
+  };
+
+  // 3. Split blocks & interleave
+  const blkLen = spec.dataCw / spec.blocks;
+  const dBlocks = [];
+  const eBlocks = [];
+  for (let b = 0; b < spec.blocks; b++) {
+    const chunk = dataBytes.slice(b * blkLen, (b + 1) * blkLen);
+    dBlocks.push(chunk);
+    eBlocks.push(rsEncode(chunk));
+  }
+  const finalCw = [];
+  for (let i = 0; i < blkLen; i++) {
+    for (let b = 0; b < spec.blocks; b++) finalCw.push(dBlocks[b][i]);
+  }
+  for (let i = 0; i < spec.ec; i++) {
+    for (let b = 0; b < spec.blocks; b++) finalCw.push(eBlocks[b][i]);
+  }
+
+  // 4. Build matrix & function patterns
+  const N = spec.size;
+  const mat = Array.from({ length: N }, () => new Array(N).fill(0));
+  const isFn = Array.from({ length: N }, () => new Array(N).fill(false));
+  const setFn = (r, c, v) => {
+    if (r < 0 || c < 0 || r >= N || c >= N) return;
+    mat[r][c] = v ? 1 : 0;
+    isFn[r][c] = true;
+  };
+
+  const drawFinder = (r0, c0) => {
+    for (let dr = -1; dr <= 7; dr++) {
+      for (let dc = -1; dc <= 7; dc++) {
+        const r = r0 + dr;
+        const c = c0 + dc;
+        if (r < 0 || c < 0 || r >= N || c >= N) continue;
+        const inBorder = dr >= 0 && dr <= 6 && dc >= 0 && dc <= 6;
+        const onOuter = dr === 0 || dr === 6 || dc === 0 || dc === 6;
+        const inCenter = dr >= 2 && dr <= 4 && dc >= 2 && dc <= 4;
+        setFn(r, c, inBorder && (onOuter || inCenter));
+      }
+    }
+  };
+  drawFinder(0, 0);
+  drawFinder(0, N - 7);
+  drawFinder(N - 7, 0);
+
+  for (let i = 8; i < N - 8; i++) {
+    setFn(6, i, i % 2 === 0);
+    setFn(i, 6, i % 2 === 0);
+  }
+  for (const ar of spec.align) {
+    for (const ac of spec.align) {
+      if (isFn[ar][ac]) continue;
+      for (let dr = -2; dr <= 2; dr++) {
+        for (let dc = -2; dc <= 2; dc++) {
+          setFn(ar + dr, ac + dc, Math.max(Math.abs(dr), Math.abs(dc)) !== 1);
+        }
+      }
+    }
+  }
+  setFn(N - 8, 8, 1);
+
+  // Reserve format areas
+  for (let i = 0; i <= 8; i++) {
+    if (!isFn[8][i]) setFn(8, i, 0);
+    if (!isFn[i][8]) setFn(i, 8, 0);
+  }
+  for (let i = 0; i < 8; i++) {
+    if (!isFn[8][N - 1 - i]) setFn(8, N - 1 - i, 0);
+    if (!isFn[N - 1 - i][8]) setFn(N - 1 - i, 8, 0);
+  }
+
+  // 5. Place data bits
+  const allBits = [];
+  for (const cw of finalCw) {
+    for (let i = 7; i >= 0; i--) allBits.push((cw >> i) & 1);
+  }
+  let bi = 0;
+  let up = true;
+  for (let col = N - 1; col >= 1; col -= 2) {
+    if (col === 6) col = 5;
+    for (let step = 0; step < N; step++) {
+      const r = up ? N - 1 - step : step;
+      for (let dc = 0; dc < 2; dc++) {
+        const c = col - dc;
+        if (!isFn[r][c]) {
+          mat[r][c] = bi < allBits.length ? allBits[bi++] : 0;
+        }
+      }
+    }
+    up = !up;
+  }
+
+  // 6. Pick best mask (0..7)
+  const maskFns = [
+    (r, c) => (r + c) % 2 === 0,
+    (r) => r % 2 === 0,
+    (_, c) => c % 3 === 0,
+    (r, c) => (r + c) % 3 === 0,
+    (r, c) => (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0,
+    (r, c) => ((r * c) % 2) + ((r * c) % 3) === 0,
+    (r, c) => (((r * c) % 2) + ((r * c) % 3)) % 2 === 0,
+    (r, c) => (((r + c) % 2) + ((r * c) % 3)) % 2 === 0,
+  ];
+  const writeFormat = (grid, maskIdx) => {
+    const d = (0b01 << 3) | maskIdx;
+    let rem = d << 10;
+    for (let i = 4; i >= 0; i--) {
+      if ((rem >> (i + 10)) & 1) rem ^= 0x537 << i;
+    }
+    const fmt = ((d << 10) | rem) ^ 0x5412;
+    const bit = (idx) => (fmt >> idx) & 1;
+    const tlCoords = [
+      [8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [8, 7], [8, 8],
+      [7, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8],
+    ];
+    for (let i = 0; i < 15; i++) {
+      const [r, c] = tlCoords[i];
+      grid[r][c] = bit(14 - i);
+    }
+    for (let i = 0; i < 7; i++) grid[N - 1 - i][8] = bit(14 - i);
+    for (let i = 0; i < 8; i++) grid[8][N - 8 + i] = bit(7 - i);
+  };
+
+  let bestGrid = null;
+  let bestScore = Infinity;
+  for (let m = 0; m < 8; m++) {
+    const g = mat.map((row, r) => row.map((v, c) => (!isFn[r][c] && maskFns[m](r, c) ? v ^ 1 : v)));
+    writeFormat(g, m);
+    let score = 0;
+    let dark = 0;
+    for (let r = 0; r < N; r++) {
+      let runR = 1;
+      let runC = 1;
+      for (let c = 0; c < N; c++) {
+        dark += g[r][c];
+        if (c > 0) {
+          if (g[r][c] === g[r][c - 1]) runR += 1;
+          else {
+            if (runR >= 5) score += 3 + (runR - 5);
+            runR = 1;
+          }
+          if (g[c][r] === g[c - 1][r]) runC += 1;
+          else {
+            if (runC >= 5) score += 3 + (runC - 5);
+            runC = 1;
+          }
+        }
+        if (r > 0 && c > 0 && g[r][c] === g[r - 1][c] && g[r][c] === g[r][c - 1] && g[r][c] === g[r - 1][c - 1]) {
+          score += 3;
+        }
+      }
+      if (runR >= 5) score += 3 + (runR - 5);
+      if (runC >= 5) score += 3 + (runC - 5);
+    }
+    score += Math.abs(Math.round((dark * 100) / (N * N)) - 50) * 2;
+    if (score < bestScore) {
+      bestScore = score;
+      bestGrid = g;
+    }
+  }
+  return bestGrid;
+}
+
+function drawRoundedRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+function wrapCanvasText(ctx, text, maxWidth, maxLines) {
+  const chars = Array.from(String(text || ''));
+  const lines = [];
+  let cur = '';
+  for (const ch of chars) {
+    if (ch === '\n') {
+      lines.push(cur);
+      cur = '';
+      if (lines.length >= maxLines) break;
+      continue;
+    }
+    const test = cur + ch;
+    if (ctx.measureText(test).width > maxWidth && cur) {
+      lines.push(cur);
+      cur = ch;
+      if (lines.length >= maxLines) {
+        lines[maxLines - 1] = lines[maxLines - 1].slice(0, -1) + '…';
+        return lines;
+      }
+    } else {
+      cur = test;
+    }
+  }
+  if (cur && lines.length < maxLines) lines.push(cur);
+  return lines;
+}
+
+function generatePosterDataUrl(item) {
+  const info = getItemDisplayInfo(item);
+  const { accent, regSt, audText, regDisplay, creditText, jumpUrl } = info;
+  const tagName = (item.tags || [])[0]?.name || '二课活动';
+  const W = 750;
+  const H = 1080;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Background gradient
+  const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+  bgGrad.addColorStop(0, '#0f172a');
+  bgGrad.addColorStop(0.42, '#111c36');
+  bgGrad.addColorStop(1, '#090e1c');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Atmospheric accent orbs
+  const orb1 = ctx.createRadialGradient(130, 110, 20, 130, 110, 340);
+  orb1.addColorStop(0, accent + '66');
+  orb1.addColorStop(1, accent + '00');
+  ctx.fillStyle = orb1;
+  ctx.fillRect(0, 0, W, 500);
+
+  const orb2 = ctx.createRadialGradient(640, 240, 10, 640, 240, 280);
+  orb2.addColorStop(0, '#38bdf844');
+  orb2.addColorStop(1, '#38bdf800');
+  ctx.fillStyle = orb2;
+  ctx.fillRect(250, 0, 500, 520);
+
+  // Header brand & status pill
+  ctx.font = '700 24px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.fillText('✦ 北化二课活动 · 实时汇', 48, 76);
+
+  ctx.font = '700 22px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
+  const statusText = regSt.label || '查看详情';
+  const stW = ctx.measureText(statusText).width + 34;
+  drawRoundedRect(ctx, W - 48 - stW, 46, stW, 42, 21);
+  ctx.fillStyle = regSt.kind === 'urgent' ? 'rgba(239,68,68,0.28)' : 'rgba(255,255,255,0.14)';
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(statusText, W - 48 - stW + 17, 74);
+
+  // Main glass card container
+  drawRoundedRect(ctx, 36, 116, W - 72, H - 156, 30);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  // Top color ribbon inside card
+  ctx.save();
+  drawRoundedRect(ctx, 36, 116, W - 72, H - 156, 30);
+  ctx.clip();
+  ctx.fillStyle = accent;
+  ctx.fillRect(36, 116, W - 72, 12);
+  ctx.restore();
+
+  let y = 178;
+  // Tag pill + Audience pill
+  ctx.font = '700 24px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
+  const tagW = ctx.measureText(tagName).width + 36;
+  drawRoundedRect(ctx, 72, y - 30, tagW, 44, 22);
+  ctx.fillStyle = accent + '20';
+  ctx.fill();
+  ctx.fillStyle = accent;
+  ctx.fillText(tagName, 90, y);
+
+  const audLabel = `👥 ${audText}`;
+  const audW = Math.min(ctx.measureText(audLabel).width + 32, W - 144 - tagW - 14);
+  if (audW > 80) {
+    drawRoundedRect(ctx, 72 + tagW + 14, y - 30, audW, 44, 22);
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fill();
+    ctx.fillStyle = '#334155';
+    const clippedAud = wrapCanvasText(ctx, audLabel, audW - 24, 1)[0] || audLabel;
+    ctx.fillText(clippedAud, 72 + tagW + 28, y);
+  }
+
+  y += 58;
+  // Activity Title
+  ctx.font = '800 40px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.fillStyle = '#0f172a';
+  const titleLines = wrapCanvasText(ctx, item.title, W - 144, 3);
+  for (const line of titleLines) {
+    ctx.fillText(line, 72, y);
+    y += 56;
+  }
+
+  // Credit box if present
+  if (creditText) {
+    y += 8;
+    ctx.font = '600 24px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
+    const creditLines = wrapCanvasText(ctx, `✦ ${creditText}`, W - 188, 2);
+    const boxH = creditLines.length * 36 + 30;
+    drawRoundedRect(ctx, 72, y, W - 144, boxH, 16);
+    ctx.fillStyle = accent + '14';
+    ctx.fill();
+    ctx.fillStyle = '#1e293b';
+    let cy = y + 40;
+    for (const cl of creditLines) {
+      ctx.fillText(cl, 94, cy);
+      cy += 36;
+    }
+    y += boxH + 22;
+  } else {
+    y += 12;
+  }
+
+  // Structured Time & Source info box
+  const rows = [
+    { k: '报名时间', v: regDisplay, hi: true },
+    ...(item.event_time ? [{ k: '活动时间', v: item.event_time, hi: false }] : []),
+    ...(item.location ? [{ k: '活动地点', v: item.location, hi: false }] : []),
+    { k: '来源公众号', v: item.source_account_name || '校内公众号', hi: false },
+  ];
+  const infoBoxH = rows.length * 58 + 32;
+  drawRoundedRect(ctx, 72, y, W - 144, infoBoxH, 20);
+  ctx.fillStyle = '#f8fafc';
+  ctx.fill();
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  let ry = y + 52;
+  for (const row of rows) {
+    ctx.font = '600 24px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText(row.k, 98, ry);
+
+    ctx.font = row.hi
+      ? '700 25px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif'
+      : '600 24px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
+    ctx.fillStyle = row.hi ? accent : '#0f172a';
+    const valLine = wrapCanvasText(ctx, row.v, W - 340, 1)[0] || row.v;
+    const vw = ctx.measureText(valLine).width;
+    ctx.fillText(valLine, W - 98 - vw, ry);
+    ry += 58;
+  }
+
+  // Footer divider + Real Scannable QR Code
+  const footY = H - 252;
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 8]);
+  ctx.beginPath();
+  ctx.moveTo(72, footY);
+  ctx.lineTo(W - 72, footY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const qrTarget = jumpUrl && new TextEncoder().encode(jumpUrl).length <= 134 ? jumpUrl : HUB_PUBLIC_URL;
+  const qrMat = makeQrMatrix(qrTarget) || makeQrMatrix(HUB_PUBLIC_URL);
+  const qrBoxSize = 158;
+  const qrX = W - 72 - qrBoxSize;
+  const qrY = footY + 26;
+
+  drawRoundedRect(ctx, qrX - 10, qrY - 10, qrBoxSize + 20, qrBoxSize + 20, 16);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  if (qrMat) {
+    const N = qrMat.length;
+    const cell = qrBoxSize / N;
+    ctx.fillStyle = '#0f172a';
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        if (qrMat[r][c]) {
+          ctx.fillRect(
+            Math.floor(qrX + c * cell),
+            Math.floor(qrY + r * cell),
+            Math.ceil(cell),
+            Math.ceil(cell)
+          );
+        }
+      }
+    }
+  }
+
+  ctx.font = '800 28px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.fillStyle = '#0f172a';
+  ctx.fillText(qrTarget === jumpUrl ? '扫码直达原推文' : '扫码查看北化二课汇', 72, footY + 76);
+
+  ctx.font = '500 21px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.fillStyle = '#64748b';
+  ctx.fillText('长按识别二维码 · 抢先一步不错过', 72, footY + 116);
+
+  ctx.font = '600 19px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillText('buct-activities · 实时聚合', 72, footY + 158);
+
+  return canvas.toDataURL('image/png');
+}
+
+function openPosterModal(item) {
+  state.posterItem = item;
+  state.posterDataUrl = generatePosterDataUrl(item);
+  const img = document.getElementById('posterPreviewImg');
+  if (img) img.src = state.posterDataUrl;
+  const copyBtn = document.getElementById('posterCopyBtn');
+  if (copyBtn) copyBtn.textContent = '🔗 复制推文链接';
+  document.getElementById('posterModal').classList.remove('hidden');
+  haptic(12);
+}
+
+function closePosterModal() {
+  document.getElementById('posterModal').classList.add('hidden');
+  state.posterItem = null;
+}
+
+function toggleSavedItem(id, triggerBtn) {
+  if (state.savedIds.has(id)) {
+    state.savedIds.delete(id);
+  } else {
+    state.savedIds.add(id);
+  }
+  persistSavedIds();
+  haptic(12);
+  if (triggerBtn) {
+    triggerBtn.classList.add('pop');
+    setTimeout(() => triggerBtn.classList.remove('pop'), 180);
+  }
+  renderFilteredLocal();
+}
+
 function openDetailSheet(item) {
   state.activeDetailId = item.id;
   renderDetailSheetContent(item);
   openSheet('detailSheet');
+  haptic(8);
 }
 
 /* ==================== 事件绑定 ==================== */
@@ -1039,62 +1831,83 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+document.getElementById('viewModeBtn').addEventListener('click', () => {
+  state.viewMode = state.viewMode === 'deck' ? 'grid' : 'deck';
+  persistViewMode();
+  updateViewModeButtonUI();
+  haptic(12);
+  renderFilteredLocal({ animate: true });
+});
+
 document.getElementById('tagBar').addEventListener('click', (e) => {
   const btn = e.target.closest('.chip');
   if (!btn) return;
   state.tagId = btn.dataset.tagId || '';
+  state.deckIndex = 0;
+  haptic(8);
   renderTagBar();
-  renderFilteredLocal();
+  renderFilteredLocal({ animate: true });
 });
 
 document.getElementById('sourceFilter').addEventListener('change', (e) => {
   state.source = e.target.value;
-  renderFilteredLocal();
+  state.deckIndex = 0;
+  renderFilteredLocal({ animate: true });
 });
 
 document.getElementById('audienceFilter').addEventListener('change', (e) => {
   state.audienceFilter = e.target.value;
-  renderFilteredLocal();
+  state.deckIndex = 0;
+  renderFilteredLocal({ animate: true });
 });
 
 document.getElementById('sortSelect').addEventListener('change', (e) => {
   state.sortBy = e.target.value || 'smart';
-  renderFilteredLocal();
+  state.deckIndex = 0;
+  renderFilteredLocal({ animate: true });
 });
 
 document.getElementById('hideEndedCheck').addEventListener('change', (e) => {
   state.hideEnded = e.target.checked;
-  renderFilteredLocal();
+  state.deckIndex = 0;
+  renderFilteredLocal({ animate: true });
 });
 
 // 移动端底部筛选抽屉事件（方案 C）
 document.getElementById('mobileFilterBtn').addEventListener('click', () => {
   syncFilterControlsUI(filterItemsLocally(state.allItems).length);
   openSheet('filterSheet');
+  haptic(8);
 });
 
 document.getElementById('fsSortPills').addEventListener('click', (e) => {
   const btn = e.target.closest('.fs-pill');
   if (!btn) return;
   state.sortBy = btn.dataset.sort || 'smart';
-  renderFilteredLocal();
+  state.deckIndex = 0;
+  haptic(8);
+  renderFilteredLocal({ animate: true });
 });
 
 document.getElementById('fsAudiencePills').addEventListener('click', (e) => {
   const btn = e.target.closest('.fs-pill');
   if (!btn) return;
   state.audienceFilter = btn.dataset.audience || '';
-  renderFilteredLocal();
+  state.deckIndex = 0;
+  haptic(8);
+  renderFilteredLocal({ animate: true });
 });
 
 document.getElementById('fsSourceSelect').addEventListener('change', (e) => {
   state.source = e.target.value;
-  renderFilteredLocal();
+  state.deckIndex = 0;
+  renderFilteredLocal({ animate: true });
 });
 
 document.getElementById('fsHideEndedCheck').addEventListener('change', (e) => {
   state.hideEnded = e.target.checked;
-  renderFilteredLocal();
+  state.deckIndex = 0;
+  renderFilteredLocal({ animate: true });
 });
 
 document.getElementById('fsResetBtn').addEventListener('click', () => {
@@ -1102,10 +1915,106 @@ document.getElementById('fsResetBtn').addEventListener('click', () => {
   state.audienceFilter = '';
   state.source = '';
   state.hideEnded = false;
-  renderFilteredLocal();
+  state.onlySaved = false;
+  state.deckIndex = 0;
+  haptic(10);
+  renderFilteredLocal({ animate: true });
 });
 
 document.getElementById('fsDoneBtn').addEventListener('click', () => closeSheet('filterSheet'));
+
+// 急抢雷达点击直达详情
+document.getElementById('radarTrack').addEventListener('click', (e) => {
+  const pill = e.target.closest('[data-radar-id]');
+  if (!pill) return;
+  const id = Number(pill.dataset.radarId);
+  const item = state.allItems.find((a) => a.id === id);
+  if (item) openDetailSheet(item);
+});
+
+// 悬浮待抢清单胶囊
+document.getElementById('favDockToggle').addEventListener('click', () => {
+  state.onlySaved = !state.onlySaved;
+  state.deckIndex = 0;
+  haptic(10);
+  renderFilteredLocal({ animate: true });
+});
+
+document.getElementById('favDockAllBtn').addEventListener('click', () => {
+  state.onlySaved = false;
+  state.deckIndex = 0;
+  haptic(8);
+  renderFilteredLocal({ animate: true });
+});
+
+// 沉浸横滑翻卡事件（被动监听 scroll 更新页码与聚焦缩放）
+const deckTrackEl = document.getElementById('deckTrack');
+let deckScrollRaf = 0;
+deckTrackEl.addEventListener(
+  'scroll',
+  () => {
+    if (deckScrollRaf) return;
+    deckScrollRaf = requestAnimationFrame(() => {
+      deckScrollRaf = 0;
+      const cards = deckTrackEl.querySelectorAll('.deck-card');
+      if (!cards.length) return;
+      const center = deckTrackEl.scrollLeft + deckTrackEl.clientWidth / 2;
+      let bestIdx = 0;
+      let bestDist = Infinity;
+      cards.forEach((c, i) => {
+        const mid = c.offsetLeft + c.clientWidth / 2;
+        const d = Math.abs(mid - center);
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = i;
+        }
+      });
+      if (bestIdx !== state.deckIndex) {
+        state.deckIndex = bestIdx;
+        updateDeckPagerUI(cards.length);
+      }
+    });
+  },
+  { passive: true }
+);
+
+document.getElementById('deckPrevBtn').addEventListener('click', () => {
+  haptic(8);
+  scrollToDeckIndex(state.deckIndex - 1);
+});
+
+document.getElementById('deckNextBtn').addEventListener('click', () => {
+  haptic(8);
+  scrollToDeckIndex(state.deckIndex + 1);
+});
+
+// 海报弹窗按钮
+document.getElementById('posterClose').addEventListener('click', closePosterModal);
+document.getElementById('posterModal').addEventListener('click', (e) => {
+  if (e.target.id === 'posterModal') closePosterModal();
+});
+document.getElementById('posterDownloadBtn').addEventListener('click', () => {
+  if (!state.posterDataUrl || !state.posterItem) return;
+  const a = document.createElement('a');
+  a.href = state.posterDataUrl;
+  a.download = `${(state.posterItem.title || 'buct-activity').replace(/[\\/:*?"<>|]/g, '').slice(0, 26)}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  haptic(12);
+});
+document.getElementById('posterCopyBtn').addEventListener('click', async () => {
+  if (!state.posterItem) return;
+  const url = safeHref(state.posterItem.source_article_url) || HUB_PUBLIC_URL;
+  const text = `【${state.posterItem.title}】${url}`;
+  try {
+    await navigator.clipboard.writeText(text);
+    document.getElementById('posterCopyBtn').textContent = '✓ 已复制链接';
+    haptic(10);
+  } catch {
+    prompt('请复制下方活动链接：', text);
+  }
+});
 
 // 通用抽屉关闭（点击遮罩、关闭按钮、下滑、Esc）
 ['filterSheet', 'detailSheet'].forEach((sheetId) => {
@@ -1121,7 +2030,9 @@ document.getElementById('fsDoneBtn').addEventListener('click', () => closeSheet(
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  if (!document.getElementById('remindModal').classList.contains('hidden')) {
+  if (!document.getElementById('posterModal').classList.contains('hidden')) {
+    closePosterModal();
+  } else if (!document.getElementById('remindModal').classList.contains('hidden')) {
     closeRemindModal();
   } else if (document.getElementById('detailSheet').classList.contains('open')) {
     closeSheet('detailSheet');
@@ -1135,31 +2046,58 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     state.q = e.target.value.trim();
+    state.deckIndex = 0;
     renderFilteredLocal();
   }, 150);
 });
 
-function handleRemindClick(e) {
-  const btn = e.target.closest('[data-remind-id]');
-  if (!btn) return false;
-  const id = Number(btn.dataset.remindId);
-  const item = state.allItems.find((a) => a.id === id);
-  if (item) openRemindModal(item);
-  return true;
+function handleCardActionClick(e) {
+  const starBtn = e.target.closest('[data-star-id]');
+  if (starBtn) {
+    toggleSavedItem(Number(starBtn.dataset.starId), starBtn);
+    return true;
+  }
+  const posterBtn = e.target.closest('[data-poster-id]');
+  if (posterBtn) {
+    const item = state.allItems.find((a) => a.id === Number(posterBtn.dataset.posterId));
+    if (item) openPosterModal(item);
+    return true;
+  }
+  const remBtn = e.target.closest('[data-remind-id]');
+  if (remBtn) {
+    const item = state.allItems.find((a) => a.id === Number(remBtn.dataset.remindId));
+    if (item) openRemindModal(item);
+    return true;
+  }
+  const openDetailBtn = e.target.closest('[data-open-detail-id]');
+  if (openDetailBtn) {
+    const item = state.allItems.find((a) => a.id === Number(openDetailBtn.dataset.openDetailId));
+    if (item) openDetailSheet(item);
+    return true;
+  }
+  return false;
 }
 
 document.getElementById('activitiesGrid').addEventListener('click', (e) => {
-  if (handleRemindClick(e)) return;
+  if (handleCardActionClick(e)) return;
   if (e.target.closest('a, button')) return;
   const card = e.target.closest('.act-card[data-card-id]');
   if (!card) return;
-  const id = Number(card.dataset.cardId);
-  const item = state.allItems.find((a) => a.id === id);
+  const item = state.allItems.find((a) => a.id === Number(card.dataset.cardId));
+  if (item) openDetailSheet(item);
+});
+
+deckTrackEl.addEventListener('click', (e) => {
+  if (handleCardActionClick(e)) return;
+  if (e.target.closest('a, button')) return;
+  const card = e.target.closest('.deck-card[data-card-id]');
+  if (!card) return;
+  const item = state.allItems.find((a) => a.id === Number(card.dataset.cardId));
   if (item) openDetailSheet(item);
 });
 
 document.getElementById('detailSheet').addEventListener('click', (e) => {
-  handleRemindClick(e);
+  handleCardActionClick(e);
 });
 
 document.getElementById('refreshBtn').addEventListener('click', refreshAll);
@@ -1175,6 +2113,9 @@ backTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smo
 
 /* ==================== 启动与定时器 ==================== */
 loadReminders();
+loadSavedIds();
+loadViewMode();
+updateViewModeButtonUI();
 syncFilterControlsUI();
 const initialCached = loadSnapshotFromCache();
 if (initialCached) {
@@ -1187,14 +2128,19 @@ if (initialCached) {
 
 refreshAll();
 
-// 每秒更新倒计时胶囊 & 检查到点的静音振动提醒
+// 每秒更新倒计时胶囊（卡片 + 详情抽屉 + 急抢雷达） & 检查静音提醒
 setInterval(() => {
   for (const item of state.allItems) {
-    const els = document.querySelectorAll(`[data-reg-pill="${item.id}"]`);
-    if (!els.length) continue;
+    const pillEls = document.querySelectorAll(`[data-reg-pill="${item.id}"]`);
+    const radarEls = document.querySelectorAll(`[data-radar-time="${item.id}"]`);
+    if (!pillEls.length && !radarEls.length) continue;
     const st = getRegistrationStatus(item);
-    els.forEach((el) => {
+    pillEls.forEach((el) => {
       el.className = `reg-pill ${st.kind}`;
+      el.textContent = st.label;
+    });
+    radarEls.forEach((el) => {
+      el.className = `radar-pill-time ${st.kind}`;
       el.textContent = st.label;
     });
   }
