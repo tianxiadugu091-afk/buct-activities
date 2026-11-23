@@ -36,6 +36,7 @@
           <span class="live-dot"></span>
           <span id="liveStatusText">同步中</span>
         </span>
+        <button class="icon-btn" id="viewModeBtn" type="button" title="切换双列卡片 / 沉浸翻卡" aria-label="切换视图模式"></button>
         <button class="icon-btn" id="themeToggle" type="button" title="深浅主题" aria-label="切换主题"></button>
         <button class="icon-btn" id="refreshBtn" type="button" title="刷新" aria-label="刷新">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
@@ -92,13 +93,45 @@
 
     <div id="reminderToast" class="reminder-toast hidden" role="alert"></div>
 
+    <!-- 急抢雷达横带（仅在有即将开抢/临近截止活动时自动显示） -->
+    <div id="radarWrap" class="radar-wrap hidden" aria-label="急抢雷达">
+      <div class="radar-badge">
+        <span class="radar-pulse"></span>
+        <span>急抢雷达</span>
+      </div>
+      <div class="radar-track" id="radarTrack"></div>
+    </div>
+
     <section id="activitiesGrid" class="cards-grid" aria-live="polite">
       <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
       <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
       <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
       <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
     </section>
+
+    <!-- 沉浸横滑翻卡舞台（原生 scroll-snap 60fps） -->
+    <section id="deckStage" class="deck-stage hidden" aria-live="polite">
+      <div class="deck-track" id="deckTrack"></div>
+      <div class="deck-pager" id="deckPager">
+        <button type="button" class="deck-nav-btn" id="deckPrevBtn" aria-label="上一张">‹</button>
+        <div class="deck-progress-wrap">
+          <div class="deck-progress-bar"><div class="deck-progress-fill" id="deckProgressFill"></div></div>
+          <span class="deck-counter" id="deckCounter">01 / 01</span>
+        </div>
+        <button type="button" class="deck-nav-btn" id="deckNextBtn" aria-label="下一张">›</button>
+      </div>
+    </section>
   </main>
+
+  <!-- 悬浮待抢收藏夹胶囊 -->
+  <div id="favDock" class="fav-dock hidden" role="region" aria-label="待抢收藏夹">
+    <button type="button" class="fav-dock-btn" id="favDockToggle">
+      <span class="fav-dock-star">★</span>
+      <span id="favDockText">待抢清单</span>
+      <span class="fav-dock-count" id="favDockCount">0</span>
+    </button>
+    <button type="button" class="fav-dock-clear hidden" id="favDockAllBtn">看全部</button>
+  </div>
 
   <footer class="mini-footer">
     <div class="container mini-footer-inner">
@@ -197,6 +230,24 @@
         <button type="button" id="rmIcsBtn" class="btn btn-sm" title="写入手机系统日历（无声弹窗，关网页/锁屏也准时生效）">📅 导入手机日历(关网页也生效)</button>
         <button type="button" id="rmCancelExisting" class="btn btn-sm btn-danger hidden">取消提醒</button>
         <button type="button" id="rmSaveBtn" class="btn btn-sm btn-primary">开启静音振动提醒</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 分享海报图预览弹窗 -->
+  <div id="posterModal" class="rm-backdrop poster-backdrop hidden">
+    <div class="rm-dialog poster-dialog" role="dialog" aria-modal="true" aria-labelledby="posterTitle">
+      <div class="rm-head">
+        <h3 id="posterTitle">活动分享卡片图</h3>
+        <button type="button" id="posterClose" class="icon-btn" style="width:30px;height:30px;">✕</button>
+      </div>
+      <div class="poster-stage">
+        <img id="posterPreviewImg" class="poster-img" alt="活动分享海报" />
+      </div>
+      <div class="poster-tip">手机可<strong>长按图片</strong>直接保存或转发微信群</div>
+      <div class="poster-actions">
+        <button type="button" id="posterCopyBtn" class="sheet-btn sheet-btn-secondary">🔗 复制推文链接</button>
+        <button type="button" id="posterDownloadBtn" class="sheet-btn sheet-btn-primary">⬇ 保存海报图</button>
       </div>
     </div>
   </div>
