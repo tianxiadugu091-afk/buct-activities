@@ -1,29 +1,17 @@
 const CACHE_KEY = 'wah_public_snapshot_v2';
 const REMIND_KEY = 'wah_silent_reminders_v1';
-const PROFILE_KEY = 'wah_user_profile_v1';
 const THEME_KEY = 'wah_theme';
 const IS_STATIC_HOST =
   window.location.protocol === 'file:' ||
   /\.(github\.io|pages\.dev|vercel\.app|netlify\.app|gitee\.io)$/i.test(window.location.hostname);
-
-const DEFAULT_PROFILE = {
-  degreeGrade: '', // '' | 'freshman' | 'upper' | 'grad'
-  college: '',
-  campus: '',      // '' | 'changping' | 'chaoyang' | 'haidian'
-  isLeague: false,
-  isParty: false,
-  showClubOnly: false,
-};
 
 const state = {
   tagId: '',
   source: '',
   audienceFilter: '',
   sortBy: 'smart',
-  onlyEligible: false,
   q: '',
   hideEnded: false,
-  profile: { ...DEFAULT_PROFILE },
   meta: null,
   allItems: [],
   isOfflineCache: false,
@@ -159,63 +147,7 @@ function getRegistrationStatus(item) {
   return { kind: 'unknown', label: '详见推文', ended: false, targetMs: null };
 }
 
-/* ==================== 身份画像与人群匹配引擎 ==================== */
-function hasConfiguredProfile(p) {
-  if (!p) return false;
-  return Boolean(p.degreeGrade || p.college || p.campus || p.isLeague || p.isParty);
-}
-
-function loadProfile() {
-  try {
-    const raw = localStorage.getItem(PROFILE_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object') {
-      state.profile = { ...DEFAULT_PROFILE, ...parsed.profile };
-      state.onlyEligible = Boolean(parsed.onlyEligible && hasConfiguredProfile(state.profile));
-    }
-  } catch {}
-}
-
-function saveProfile() {
-  try {
-    localStorage.setItem(
-      PROFILE_KEY,
-      JSON.stringify({ profile: state.profile, onlyEligible: state.onlyEligible })
-    );
-  } catch {}
-}
-
-function updateProfileButtonUI() {
-  const btn = document.getElementById('profileBtn');
-  const txt = document.getElementById('profileBtnText');
-  const eligibleCheck = document.getElementById('onlyEligibleCheck');
-  if (!btn || !txt) return;
-
-  const p = state.profile;
-  const configured = hasConfiguredProfile(p);
-  btn.classList.toggle('configured', configured);
-
-  if (!configured) {
-    txt.textContent = '👤 我的身份';
-  } else {
-    const segs = [];
-    if (p.college) segs.push(p.college.replace(/学院|书院|系$/, ''));
-    if (p.degreeGrade === 'freshman') segs.push('大一');
-    else if (p.degreeGrade === 'upper') segs.push('本科');
-    else if (p.degreeGrade === 'grad') segs.push('研究生');
-    if (!segs.length && p.campus) {
-      segs.push(p.campus === 'changping' ? '昌平' : p.campus === 'chaoyang' ? '朝阳' : '海淀');
-    }
-    if (!segs.length) segs.push(p.isParty ? '党员' : '团员');
-    txt.textContent = segs.slice(0, 2).join('·');
-  }
-
-  if (eligibleCheck) {
-    eligibleCheck.checked = state.onlyEligible;
-  }
-}
-
+/* ==================== 面向人群快捷筛选 ==================== */
 function getAudienceObj(item) {
   const raw = item?.audience_json;
   if (raw && typeof raw === 'object') return raw;
@@ -225,61 +157,6 @@ function getAudienceObj(item) {
     } catch {}
   }
   return { scope: 'unknown', colleges: [], grades: [], degrees: [], campuses: [], politics: [], clubOnly: false };
-}
-
-function evaluateEligibility(item, profile) {
-  const aud = getAudienceObj(item);
-  if (!aud || aud.scope === 'unknown') {
-    return { status: 'unknown', reason: '' };
-  }
-  if (aud.clubOnly) {
-    return profile.showClubOnly
-      ? { status: 'eligible', reason: '' }
-      : { status: 'ineligible', reason: '仅限社团内部' };
-  }
-  if (aud.scope === 'all') {
-    return { status: 'eligible', reason: '' };
-  }
-
-  // College check
-  if (Array.isArray(aud.colleges) && aud.colleges.length > 0 && profile.college) {
-    if (!aud.colleges.includes(profile.college)) {
-      return { status: 'ineligible', reason: `限${aud.colleges.join('/')}` };
-    }
-  }
-  // Grade check
-  if (Array.isArray(aud.grades) && aud.grades.length > 0 && profile.degreeGrade) {
-    if (aud.grades.includes('freshman') && profile.degreeGrade !== 'freshman') {
-      return { status: 'ineligible', reason: '限大一新生' };
-    }
-    if (aud.grades.includes('upper') && profile.degreeGrade !== 'upper') {
-      return { status: 'ineligible', reason: '限非大一本科' };
-    }
-  }
-  // Degree check
-  if (Array.isArray(aud.degrees) && aud.degrees.length > 0 && profile.degreeGrade) {
-    const userDeg = profile.degreeGrade === 'grad' ? 'grad' : 'undergrad';
-    if (!aud.degrees.includes(userDeg)) {
-      return { status: 'ineligible', reason: aud.degrees.includes('grad') ? '限研究生' : '限本科生' };
-    }
-  }
-  // Campus check
-  if (Array.isArray(aud.campuses) && aud.campuses.length > 0 && profile.campus) {
-    if (!aud.campuses.includes(profile.campus)) {
-      return { status: 'ineligible', reason: '限其他校区' };
-    }
-  }
-  // Politics check
-  if (Array.isArray(aud.politics) && aud.politics.length > 0 && (profile.isLeague || profile.isParty)) {
-    const matchedPol =
-      (aud.politics.includes('party') && profile.isParty) ||
-      (aud.politics.includes('league') && profile.isLeague);
-    if (!matchedPol) {
-      return { status: 'ineligible', reason: '限特定政治面貌' };
-    }
-  }
-
-  return { status: 'eligible', reason: '' };
 }
 
 function matchesAudienceQuickFilter(item, filterKey) {
@@ -528,15 +405,10 @@ function renderSourceSelect() {
 
 function filterItemsLocally(items) {
   const needle = state.q.toLowerCase();
-  const profileConfigured = hasConfiguredProfile(state.profile);
 
   return (items || []).filter((item) => {
     const regSt = getRegistrationStatus(item);
     if (state.hideEnded && regSt.ended) return false;
-    if (state.onlyEligible) {
-      const elig = evaluateEligibility(item, state.profile);
-      if (elig.status === 'ineligible') return false;
-    }
     if (state.audienceFilter && !matchesAudienceQuickFilter(item, state.audienceFilter)) return false;
     if (state.tagId && !(item.tags || []).some((t) => String(t.id) === String(state.tagId))) return false;
     if (state.source && item.source_account_name !== state.source) return false;
@@ -607,7 +479,6 @@ function renderCard(item) {
   const isArmed = Boolean(rem && !rem.fired);
   const aud = getAudienceObj(item);
   const audText = item.audience_text || (aud.scope === 'all' ? '全校可报' : '人群详见推文');
-  const elig = hasConfiguredProfile(state.profile) ? evaluateEligibility(item, state.profile) : { status: 'unknown', reason: '' };
 
   let audClass = 'unknown';
   if (aud.clubOnly) audClass = 'club';
@@ -649,11 +520,6 @@ function renderCard(item) {
 
         <div class="audience-row">
           <span class="audience-badge ${audClass}">👥 ${escapeHtml(audText)}</span>
-          ${
-            elig.status === 'ineligible'
-              ? `<span class="audience-badge mismatch">✕ 身份不符（${escapeHtml(elig.reason)}）</span>`
-              : ''
-          }
         </div>
 
         ${
@@ -709,10 +575,7 @@ function renderFilteredLocal() {
   const grid = document.getElementById('activitiesGrid');
   const items = sortItemsLocally(filterItemsLocally(state.allItems));
   if (!items.length) {
-    const hint = state.onlyEligible
-      ? '暂无符合你所设身份与条件的活动（可点击顶部「我的身份」调整或关闭「只看我能报」）'
-      : '暂无符合条件的活动';
-    grid.innerHTML = `<div class=empty-box>${hint}</div>`;
+    grid.innerHTML = '<div class="empty-box">暂无符合条件的活动</div>';
     return;
   }
   grid.innerHTML = items.map(renderCard).join('');
@@ -939,67 +802,8 @@ document.getElementById('sortSelect').addEventListener('change', (e) => {
   renderFilteredLocal();
 });
 
-document.getElementById('onlyEligibleCheck').addEventListener('change', (e) => {
-  const want = e.target.checked;
-  if (want && !hasConfiguredProfile(state.profile)) {
-    e.target.checked = false;
-    openProfileModal();
-    return;
-  }
-  state.onlyEligible = want;
-  saveProfile();
-  renderFilteredLocal();
-});
-
 document.getElementById('hideEndedCheck').addEventListener('change', (e) => {
   state.hideEnded = e.target.checked;
-  renderFilteredLocal();
-});
-
-/* ==================== 我的身份设置弹窗 ==================== */
-function openProfileModal() {
-  const p = state.profile;
-  document.getElementById('profDegreeGrade').value = p.degreeGrade || '';
-  document.getElementById('profCollege').value = p.college || '';
-  document.getElementById('profCampus').value = p.campus || '';
-  document.getElementById('profLeague').checked = Boolean(p.isLeague);
-  document.getElementById('profParty').checked = Boolean(p.isParty);
-  document.getElementById('profShowClub').checked = Boolean(p.showClubOnly);
-  document.getElementById('profileModal').classList.remove('hidden');
-}
-
-function closeProfileModal() {
-  document.getElementById('profileModal').classList.add('hidden');
-}
-
-document.getElementById('profileBtn').addEventListener('click', openProfileModal);
-document.getElementById('profClose').addEventListener('click', closeProfileModal);
-document.getElementById('profileModal').addEventListener('click', (e) => {
-  if (e.target.id === 'profileModal') closeProfileModal();
-});
-
-document.getElementById('profSaveBtn').addEventListener('click', () => {
-  state.profile = {
-    degreeGrade: document.getElementById('profDegreeGrade').value,
-    college: document.getElementById('profCollege').value,
-    campus: document.getElementById('profCampus').value,
-    isLeague: document.getElementById('profLeague').checked,
-    isParty: document.getElementById('profParty').checked,
-    showClubOnly: document.getElementById('profShowClub').checked,
-  };
-  state.onlyEligible = hasConfiguredProfile(state.profile);
-  saveProfile();
-  updateProfileButtonUI();
-  closeProfileModal();
-  renderFilteredLocal();
-});
-
-document.getElementById('profResetBtn').addEventListener('click', () => {
-  state.profile = { ...DEFAULT_PROFILE };
-  state.onlyEligible = false;
-  saveProfile();
-  updateProfileButtonUI();
-  closeProfileModal();
   renderFilteredLocal();
 });
 
@@ -1035,8 +839,6 @@ backTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smo
 
 /* ==================== 启动与定时器 ==================== */
 loadReminders();
-loadProfile();
-updateProfileButtonUI();
 const initialCached = loadSnapshotFromCache();
 if (initialCached) {
   state.meta = initialCached.meta;
