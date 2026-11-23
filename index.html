@@ -32,6 +32,10 @@
       </label>
 
       <div class="topbar-actions">
+        <button class="profile-btn" id="profileBtn" type="button" title="设置我的学院、年级与校区，一键筛选能报名的活动">
+          <span class="profile-dot" id="profileDot"></span>
+          <span id="profileBtnText">👤 我的身份</span>
+        </button>
         <span class="fresh-dot-pill" id="livePill" title="数据更新状态">
           <span class="live-dot"></span>
           <span id="liveStatusText">同步中</span>
@@ -48,10 +52,32 @@
     <div class="container filter-inner">
       <div class="chip-row" id="tagBar"></div>
       <div class="filter-right">
-        <label class="toggle-ended" title="隐藏报名已截止的活动">
-          <input type="checkbox" id="hideEndedCheck" />
-          <span>隐藏已截止</span>
+        <label class="toggle-ended toggle-eligible" title="仅保留全校可报及符合你所设身份的活动（未写明人群的活动默认保留）">
+          <input type="checkbox" id="onlyEligibleCheck" />
+          <span>只看我能报</span>
         </label>
+        <label class="toggle-ended" title="隐藏报名已截止或活动已结束的条目">
+          <input type="checkbox" id="hideEndedCheck" />
+          <span>隐藏已结束</span>
+        </label>
+        <div class="select-wrap">
+          <select id="audienceFilter" aria-label="按面向人群筛选">
+            <option value="">全部人群</option>
+            <option value="all">全校可报</option>
+            <option value="undergrad">本科生可报</option>
+            <option value="freshman">大一新生</option>
+            <option value="grad">研究生</option>
+            <option value="college">限指定学院</option>
+            <option value="club">社团内部</option>
+          </select>
+        </div>
+        <div class="select-wrap">
+          <select id="sortSelect" aria-label="排序方式">
+            <option value="smart">智能排序</option>
+            <option value="latest">最新发布</option>
+            <option value="deadline">最快截止</option>
+          </select>
+        </div>
         <div class="select-wrap">
           <select id="sourceFilter" aria-label="按来源公众号筛选">
             <option value="">全部公众号</option>
@@ -101,9 +127,75 @@
       </div>
 
       <div class="rm-actions">
-        <button type="button" id="rmIcsBtn" class="btn btn-sm" title="写入手机系统日历（无声弹窗，关网页也生效）">导入手机日历(无声)</button>
+        <button type="button" id="rmIcsBtn" class="btn btn-sm" title="写入手机系统日历（无声弹窗，关网页/锁屏也准时生效）">📅 导入手机日历(关网页也生效)</button>
         <button type="button" id="rmCancelExisting" class="btn btn-sm btn-danger hidden">取消提醒</button>
         <button type="button" id="rmSaveBtn" class="btn btn-sm btn-primary">开启静音振动提醒</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 我的身份设置弹窗 -->
+  <div id="profileModal" class="rm-backdrop hidden">
+    <div class="rm-dialog" role="dialog" aria-modal="true" aria-labelledby="profTitle">
+      <div class="rm-head">
+        <h3 id="profTitle">👤 设置我的北化身份</h3>
+        <button type="button" id="profClose" class="icon-btn" style="width:30px;height:30px;">✕</button>
+      </div>
+      <div class="rm-note">仅保存在你的本机浏览器中。设置后开启<strong>「只看我能报」</strong>即可自动屏蔽其他学院、社团内部或非本年级活动（未写明人群的活动默认保留不误杀）。</div>
+
+      <div class="rm-field">
+        <label for="profDegreeGrade">学历与年级</label>
+        <select id="profDegreeGrade" class="input">
+          <option value="">暂不指定</option>
+          <option value="freshman">本科生 · 大一新生</option>
+          <option value="upper">本科生 · 非大一（大二~大四）</option>
+          <option value="grad">研究生（硕士 / 博士）</option>
+        </select>
+      </div>
+
+      <div class="rm-field">
+        <label for="profCollege">所在学院 / 书院</label>
+        <select id="profCollege" class="input">
+          <option value="">暂不指定</option>
+          <option value="化学学院">化学学院</option>
+          <option value="化工学院">化工学院</option>
+          <option value="材料学院">材料学院</option>
+          <option value="机电学院">机电学院</option>
+          <option value="信息学院">信息学院</option>
+          <option value="经管学院">经管学院</option>
+          <option value="数理学院">数理学院</option>
+          <option value="文法学院">文法学院</option>
+          <option value="生命学院">生命学院</option>
+          <option value="巴黎居里学院">巴黎居里学院</option>
+          <option value="国际教育学院">国际教育学院</option>
+          <option value="宏德书院">宏德书院</option>
+          <option value="侯德榜工程师学院">侯德榜工程师学院</option>
+          <option value="艺术与设计系">艺术与设计系</option>
+        </select>
+      </div>
+
+      <div class="rm-field">
+        <label for="profCampus">所在校区</label>
+        <select id="profCampus" class="input">
+          <option value="">暂不指定</option>
+          <option value="changping">昌平校区（北区）</option>
+          <option value="chaoyang">朝阳校区（东区）</option>
+          <option value="haidian">海淀校区（西区）</option>
+        </select>
+      </div>
+
+      <div class="rm-field">
+        <label>政治面貌与社团偏好（选填）</label>
+        <div class="prof-checks">
+          <label><input type="checkbox" id="profLeague" /> 共青团员</label>
+          <label><input type="checkbox" id="profParty" /> 中共党员 / 预备 / 积极分子</label>
+          <label><input type="checkbox" id="profShowClub" /> 仍显示「限社团内部」招募</label>
+        </div>
+      </div>
+
+      <div class="rm-actions">
+        <button type="button" id="profResetBtn" class="btn btn-sm">清空身份</button>
+        <button type="button" id="profSaveBtn" class="btn btn-sm btn-primary">保存并开启筛选</button>
       </div>
     </div>
   </div>
