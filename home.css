@@ -156,6 +156,46 @@ html[data-theme='dark'] .fresh-dot-pill.offline {
   box-shadow: none;
 }
 
+.profile-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.profile-btn:hover {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+}
+
+.profile-btn.configured {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+}
+
+.profile-dot {
+  display: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.profile-btn.configured .profile-dot {
+  display: inline-block;
+}
+
 .icon-btn {
   width: 34px;
   height: 34px;
@@ -266,7 +306,8 @@ html[data-theme='dark'] .fresh-dot-pill.offline {
 .filter-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
   flex-shrink: 0;
 }
 
@@ -279,6 +320,20 @@ html[data-theme='dark'] .fresh-dot-pill.offline {
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
+}
+
+.toggle-eligible {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-weight: 600;
+}
+
+.toggle-eligible:has(input:checked) {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  background: color-mix(in srgb, var(--primary) 9%, var(--surface));
 }
 
 .select-wrap {
@@ -302,8 +357,8 @@ html[data-theme='dark'] .fresh-dot-pill.offline {
   appearance: none;
   -webkit-appearance: none;
   height: 32px;
-  min-width: 145px;
-  padding: 0 28px 0 11px;
+  min-width: 110px;
+  padding: 0 26px 0 10px;
   border-radius: 9px;
   border: 1px solid var(--border);
   background: var(--surface);
@@ -501,6 +556,75 @@ html[data-theme='dark'] .reg-pill.urgent { color: #f87171; }
 
 html[data-theme='dark'] .act-credit.uncertain {
   color: #fbbf24;
+}
+
+/* 面向人群与身份匹配徽章 */
+.audience-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.audience-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2.5px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.audience-badge.all {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.22);
+}
+
+.audience-badge.restricted {
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.09);
+  border-color: rgba(37, 99, 235, 0.22);
+}
+
+.audience-badge.club {
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.1);
+  border-color: rgba(124, 58, 237, 0.24);
+}
+
+.audience-badge.mismatch {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+html[data-theme='dark'] .audience-badge.all { color: #6ee7b7; }
+html[data-theme='dark'] .audience-badge.restricted { color: #93c5fd; }
+html[data-theme='dark'] .audience-badge.club { color: #c4b5fd; }
+html[data-theme='dark'] .audience-badge.mismatch { color: #fca5a5; }
+
+.prof-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.prof-checks label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
 }
 
 /* 报名时间 vs 发布时间 双行紧凑块 */
