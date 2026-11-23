@@ -19,6 +19,7 @@ const state = {
   lastSyncedAt: null,
   reminders: {}, // { [activityId]: { atMs, title, url, fired } }
   editingRemindItem: null,
+  activeDetailId: null,
 };
 
 /* ==================== 工具函数 ==================== */
@@ -391,7 +392,6 @@ function renderTagBar() {
 }
 
 function renderSourceSelect() {
-  const select = document.getElementById('sourceFilter');
   const opts = ['<option value="">全部公众号</option>'];
   for (const s of state.meta?.sources || []) {
     opts.push(
@@ -400,7 +400,17 @@ function renderSourceSelect() {
       })</option>`
     );
   }
-  select.innerHTML = opts.join('');
+  const html = opts.join('');
+  const desktopSelect = document.getElementById('sourceFilter');
+  const mobileSelect = document.getElementById('fsSourceSelect');
+  if (desktopSelect) {
+    desktopSelect.innerHTML = html;
+    desktopSelect.value = state.source;
+  }
+  if (mobileSelect) {
+    mobileSelect.innerHTML = html;
+    mobileSelect.value = state.source;
+  }
 }
 
 function filterItemsLocally(items) {
@@ -509,7 +519,7 @@ function renderCard(item) {
     : '';
 
   return `
-    <article class="act-card ${regSt.ended ? 'is-ended' : ''} ${isUncertain ? 'is-uncertain' : ''}" style="--accent:${accent}">
+    <article class="act-card ${regSt.ended ? 'is-ended' : ''} ${isUncertain ? 'is-uncertain' : ''}" data-card-id="${item.id}" style="--accent:${accent}">
       <div class="act-body">
         <div class="act-top">
           <div class="act-tags">${tagsHtml}</div>
@@ -532,18 +542,18 @@ function renderCard(item) {
 
         <div class="time-box">
           <div class="time-row">
-            <span class="time-key">报名时间</span>
+            <span class="time-key">报名</span>
             <span class="time-val ${item.reg_time_text || item.reg_start_at || item.reg_end_at ? 'reg-highlight' : 'muted'}">${escapeHtml(
               regDisplay
             )}</span>
           </div>
-          <div class="time-row">
+          <div class="time-row time-row-secondary">
             <span class="time-key">发布时间</span>
             <span class="time-val muted">${escapeHtml(pubDisplay)}</span>
           </div>
           ${
             item.event_time
-              ? `<div class="time-row"><span class="time-key">活动时间</span><span class="time-val muted">${escapeHtml(
+              ? `<div class="time-row time-row-secondary"><span class="time-key">活动时间</span><span class="time-val muted">${escapeHtml(
                   item.event_time
                 )}</span></div>`
               : ''
@@ -560,6 +570,7 @@ function renderCard(item) {
           )}</div>
           <span class="src-name">${escapeHtml(item.source_account_name)}</span>
         </div>
+        <span class="card-mobile-cue ${isArmed ? 'armed' : ''}">${isArmed ? '🔔' : '详情 ›'}</span>
         <div class="foot-actions">
           <button type="button" class="remind-btn ${isArmed ? 'armed' : ''}" data-remind-id="${item.id}" title="设置静音振动提醒（上课不响铃）">
             ${isArmed ? '✓ 已提醒' : '🔔 提醒'}
@@ -571,14 +582,61 @@ function renderCard(item) {
   `;
 }
 
+function syncFilterControlsUI(matchedCount) {
+  const hideDesktop = document.getElementById('hideEndedCheck');
+  const audDesktop = document.getElementById('audienceFilter');
+  const sortDesktop = document.getElementById('sortSelect');
+  const srcDesktop = document.getElementById('sourceFilter');
+  if (hideDesktop) hideDesktop.checked = state.hideEnded;
+  if (audDesktop) audDesktop.value = state.audienceFilter;
+  if (sortDesktop) sortDesktop.value = state.sortBy;
+  if (srcDesktop) srcDesktop.value = state.source;
+
+  const hideMobile = document.getElementById('fsHideEndedCheck');
+  const srcMobile = document.getElementById('fsSourceSelect');
+  if (hideMobile) hideMobile.checked = state.hideEnded;
+  if (srcMobile) srcMobile.value = state.source;
+
+  document.querySelectorAll('#fsSortPills .fs-pill').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.sort === state.sortBy);
+  });
+  document.querySelectorAll('#fsAudiencePills .fs-pill').forEach((btn) => {
+    btn.classList.toggle('active', (btn.dataset.audience || '') === state.audienceFilter);
+  });
+
+  let activeCount = 0;
+  if (state.hideEnded) activeCount += 1;
+  if (state.audienceFilter) activeCount += 1;
+  if (state.source) activeCount += 1;
+  if (state.sortBy !== 'smart') activeCount += 1;
+
+  const mfBtn = document.getElementById('mobileFilterBtn');
+  const mfBadge = document.getElementById('mobileFilterBadge');
+  if (mfBtn) mfBtn.classList.toggle('has-active', activeCount > 0);
+  if (mfBadge) {
+    mfBadge.textContent = String(activeCount);
+    mfBadge.classList.toggle('hidden', activeCount === 0);
+  }
+
+  const doneBtn = document.getElementById('fsDoneBtn');
+  if (doneBtn && typeof matchedCount === 'number') {
+    doneBtn.textContent = `查看 ${matchedCount} 项活动`;
+  }
+}
+
 function renderFilteredLocal() {
   const grid = document.getElementById('activitiesGrid');
   const items = sortItemsLocally(filterItemsLocally(state.allItems));
+  syncFilterControlsUI(items.length);
   if (!items.length) {
     grid.innerHTML = '<div class="empty-box">暂无符合条件的活动</div>';
     return;
   }
   grid.innerHTML = items.map(renderCard).join('');
+  if (state.activeDetailId !== null) {
+    const current = state.allItems.find((a) => a.id === state.activeDetailId);
+    if (current) renderDetailSheetContent(current);
+  }
 }
 
 function applyMetaToDom() {
@@ -772,6 +830,208 @@ async function refreshAll() {
   }
 }
 
+/* ==================== 底部抽屉（详情 & 筛选） ==================== */
+function syncBodySheetLock() {
+  const anyOpen = Boolean(document.querySelector('.sheet-backdrop.open'));
+  document.body.classList.toggle('sheet-open', anyOpen);
+}
+
+function openSheet(sheetId) {
+  const el = document.getElementById(sheetId);
+  if (!el) return;
+  el.classList.add('open');
+  el.setAttribute('aria-hidden', 'false');
+  syncBodySheetLock();
+}
+
+function closeSheet(sheetId) {
+  const el = document.getElementById(sheetId);
+  if (!el) return;
+  el.classList.remove('open');
+  el.setAttribute('aria-hidden', 'true');
+  const panel = el.querySelector('.sheet-panel');
+  if (panel) {
+    panel.classList.remove('dragging');
+    panel.style.transform = '';
+  }
+  if (sheetId === 'detailSheet') state.activeDetailId = null;
+  syncBodySheetLock();
+}
+
+function attachSheetSwipeDismiss(sheetId) {
+  const backdrop = document.getElementById(sheetId);
+  if (!backdrop) return;
+  const panel = backdrop.querySelector('.sheet-panel');
+  const body = backdrop.querySelector('.sheet-body');
+  if (!panel) return;
+
+  let startY = 0;
+  let currentDy = 0;
+  let tracking = false;
+
+  panel.addEventListener(
+    'touchstart',
+    (e) => {
+      if (e.touches.length !== 1) return;
+      const inHandle = Boolean(e.target.closest('.sheet-handle-area, .sheet-head'));
+      if (!inHandle && body && body.scrollTop > 2) return;
+      startY = e.touches[0].clientY;
+      currentDy = 0;
+      tracking = true;
+    },
+    { passive: true }
+  );
+
+  panel.addEventListener(
+    'touchmove',
+    (e) => {
+      if (!tracking) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy <= 0) {
+        if (currentDy > 0) {
+          currentDy = 0;
+          panel.style.transform = '';
+        }
+        return;
+      }
+      if (body && body.scrollTop > 2) {
+        tracking = false;
+        panel.classList.remove('dragging');
+        panel.style.transform = '';
+        return;
+      }
+      currentDy = dy;
+      panel.classList.add('dragging');
+      panel.style.transform = `translate3d(0, ${Math.min(dy, 420)}px, 0)`;
+    },
+    { passive: true }
+  );
+
+  const finishSwipe = () => {
+    if (!tracking) return;
+    tracking = false;
+    panel.classList.remove('dragging');
+    if (currentDy > 85) {
+      closeSheet(sheetId);
+    } else {
+      panel.style.transform = '';
+    }
+    currentDy = 0;
+  };
+
+  panel.addEventListener('touchend', finishSwipe, { passive: true });
+  panel.addEventListener('touchcancel', finishSwipe, { passive: true });
+}
+
+function renderDetailSheetContent(item) {
+  const primary = (item.tags || [])[0];
+  const accent = safeColor(primary?.color);
+  const regSt = getRegistrationStatus(item);
+  const isUncertain = Boolean(item.is_uncertain) || (item.tags || []).some((t) => /存疑/.test(t.name));
+  const rem = state.reminders[item.id];
+  const isArmed = Boolean(rem && !rem.fired);
+  const aud = getAudienceObj(item);
+  const audText = item.audience_text || (aud.scope === 'all' ? '全校可报' : '人群详见推文');
+
+  let audClass = 'unknown';
+  if (aud.clubOnly) audClass = 'club';
+  else if (aud.scope === 'all') audClass = 'all';
+  else if (aud.scope === 'restricted') audClass = 'restricted';
+
+  const tagsHtml = (item.tags || [])
+    .map((t) => `<span class="act-tag" style="--c:${safeColor(t.color)}">${escapeHtml(t.name)}</span>`)
+    .join('');
+
+  const regDisplay =
+    item.reg_time_text ||
+    (item.reg_start_at && item.reg_end_at
+      ? `${formatMdHm(item.reg_start_at)} ~ ${formatMdHm(item.reg_end_at)}`
+      : item.reg_start_at
+      ? `${formatMdHm(item.reg_start_at)} 开始`
+      : item.reg_end_at
+      ? `${formatMdHm(item.reg_end_at)} 截止`
+      : item.deadline || '详见原推文');
+
+  const pubDisplay = formatFullTime(item.published_at) || '—';
+  const creditText =
+    item.credit_hint || (isUncertain ? '二课类别存疑 · 可自行联系主办方询问' : '');
+  const jumpUrl = safeHref(item.source_article_url);
+
+  document.getElementById('dsAccentBar').style.background = accent;
+  document.getElementById('dsHeadMeta').innerHTML = `
+    ${tagsHtml}
+    <span class="reg-pill ${regSt.kind}" data-reg-pill="${item.id}">${escapeHtml(regSt.label)}</span>
+  `;
+
+  document.getElementById('dsBody').innerHTML = `
+    <h2 class="ds-title" id="dsTitle">${escapeHtml(item.title)}</h2>
+    <div class="ds-badges">
+      <span class="audience-badge ${audClass}">👥 面向人群：${escapeHtml(audText)}</span>
+    </div>
+    ${
+      creditText
+        ? `<div class="ds-credit-card ${isUncertain ? 'uncertain' : ''}">${
+            isUncertain ? '⚠️ ' : '✦ 二课说明：'
+          }${escapeHtml(creditText)}</div>`
+        : ''
+    }
+    <div class="ds-time-card">
+      <div class="time-row">
+        <span class="time-key">报名时间</span>
+        <span class="time-val ${item.reg_time_text || item.reg_start_at || item.reg_end_at ? 'reg-highlight' : 'muted'}">${escapeHtml(
+          regDisplay
+        )}</span>
+      </div>
+      ${
+        item.event_time
+          ? `<div class="time-row"><span class="time-key">活动时间</span><span class="time-val">${escapeHtml(
+              item.event_time
+            )}</span></div>`
+          : ''
+      }
+      ${
+        item.location
+          ? `<div class="time-row"><span class="time-key">活动地点</span><span class="time-val muted">${escapeHtml(
+              item.location
+            )}</span></div>`
+          : ''
+      }
+      <div class="time-row">
+        <span class="time-key">发布时间</span>
+        <span class="time-val muted">${escapeHtml(pubDisplay)}</span>
+      </div>
+    </div>
+    <div class="ds-source-card">
+      <div class="avatar" style="width:34px;height:34px;border-radius:9px;font-size:14px;${avatarStyle(
+        item.source_account_name
+      )}">${escapeHtml(avatarChar(item.source_account_name))}</div>
+      <div class="ds-source-info">
+        <div class="ds-source-name">${escapeHtml(item.source_account_name)}</div>
+        <div class="ds-source-article">原推文：《${escapeHtml(item.source_article_title || item.title)}》</div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('dsFoot').innerHTML = `
+    <button type="button" class="sheet-btn sheet-btn-secondary ${isArmed ? 'armed' : ''}" data-remind-id="${item.id}">
+      ${isArmed ? '✓ 已设提醒（修改）' : '🔔 静音提醒'}
+    </button>
+    ${
+      jumpUrl
+        ? `<a class="sheet-btn sheet-btn-primary" style="background:${accent}" href="${escapeHtml(
+            jumpUrl
+          )}" target="_blank" rel="noopener noreferrer">阅读原推文 ↗</a>`
+        : ''
+    }
+  `;
+}
+
+function openDetailSheet(item) {
+  state.activeDetailId = item.id;
+  renderDetailSheetContent(item);
+  openSheet('detailSheet');
+}
+
 /* ==================== 事件绑定 ==================== */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -807,6 +1067,69 @@ document.getElementById('hideEndedCheck').addEventListener('change', (e) => {
   renderFilteredLocal();
 });
 
+// 移动端底部筛选抽屉事件（方案 C）
+document.getElementById('mobileFilterBtn').addEventListener('click', () => {
+  syncFilterControlsUI(filterItemsLocally(state.allItems).length);
+  openSheet('filterSheet');
+});
+
+document.getElementById('fsSortPills').addEventListener('click', (e) => {
+  const btn = e.target.closest('.fs-pill');
+  if (!btn) return;
+  state.sortBy = btn.dataset.sort || 'smart';
+  renderFilteredLocal();
+});
+
+document.getElementById('fsAudiencePills').addEventListener('click', (e) => {
+  const btn = e.target.closest('.fs-pill');
+  if (!btn) return;
+  state.audienceFilter = btn.dataset.audience || '';
+  renderFilteredLocal();
+});
+
+document.getElementById('fsSourceSelect').addEventListener('change', (e) => {
+  state.source = e.target.value;
+  renderFilteredLocal();
+});
+
+document.getElementById('fsHideEndedCheck').addEventListener('change', (e) => {
+  state.hideEnded = e.target.checked;
+  renderFilteredLocal();
+});
+
+document.getElementById('fsResetBtn').addEventListener('click', () => {
+  state.sortBy = 'smart';
+  state.audienceFilter = '';
+  state.source = '';
+  state.hideEnded = false;
+  renderFilteredLocal();
+});
+
+document.getElementById('fsDoneBtn').addEventListener('click', () => closeSheet('filterSheet'));
+
+// 通用抽屉关闭（点击遮罩、关闭按钮、下滑、Esc）
+['filterSheet', 'detailSheet'].forEach((sheetId) => {
+  const el = document.getElementById(sheetId);
+  if (!el) return;
+  el.addEventListener('click', (e) => {
+    if (e.target === el) closeSheet(sheetId);
+    const closeBtn = e.target.closest('[data-sheet-close]');
+    if (closeBtn) closeSheet(closeBtn.dataset.sheetClose);
+  });
+  attachSheetSwipeDismiss(sheetId);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!document.getElementById('remindModal').classList.contains('hidden')) {
+    closeRemindModal();
+  } else if (document.getElementById('detailSheet').classList.contains('open')) {
+    closeSheet('detailSheet');
+  } else if (document.getElementById('filterSheet').classList.contains('open')) {
+    closeSheet('filterSheet');
+  }
+});
+
 let searchTimer = null;
 document.getElementById('searchInput').addEventListener('input', (e) => {
   clearTimeout(searchTimer);
@@ -818,13 +1141,26 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
 
 function handleRemindClick(e) {
   const btn = e.target.closest('[data-remind-id]');
-  if (!btn) return;
+  if (!btn) return false;
   const id = Number(btn.dataset.remindId);
   const item = state.allItems.find((a) => a.id === id);
   if (item) openRemindModal(item);
+  return true;
 }
 
-document.getElementById('activitiesGrid').addEventListener('click', handleRemindClick);
+document.getElementById('activitiesGrid').addEventListener('click', (e) => {
+  if (handleRemindClick(e)) return;
+  if (e.target.closest('a, button')) return;
+  const card = e.target.closest('.act-card[data-card-id]');
+  if (!card) return;
+  const id = Number(card.dataset.cardId);
+  const item = state.allItems.find((a) => a.id === id);
+  if (item) openDetailSheet(item);
+});
+
+document.getElementById('detailSheet').addEventListener('click', (e) => {
+  handleRemindClick(e);
+});
 
 document.getElementById('refreshBtn').addEventListener('click', refreshAll);
 document.getElementById('retryOnlineBtn').addEventListener('click', refreshAll);
@@ -839,6 +1175,7 @@ backTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smo
 
 /* ==================== 启动与定时器 ==================== */
 loadReminders();
+syncFilterControlsUI();
 const initialCached = loadSnapshotFromCache();
 if (initialCached) {
   state.meta = initialCached.meta;
