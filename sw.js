@@ -1,5 +1,5 @@
-const SHELL_CACHE = 'buct-hub-shell-v11';
-const SHELL_ASSETS = ['./', './index.html', './styles.css', './home.css', './app.js', './manifest.json'];
+const SHELL_CACHE = 'buct-hub-shell-v12';
+const SHELL_ASSETS = ['./', './index.html', './styles.css', './home.css', './themes.css', './app.js', './manifest.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
