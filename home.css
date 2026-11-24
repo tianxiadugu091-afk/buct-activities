@@ -1514,6 +1514,323 @@ body.sheet-open {
   box-shadow: inset 0 2px rgba(255, 255, 255, 0.45), inset 0 -2px rgba(0, 0, 0, 0.3);
 }
 
+/* ---------- 细则点选清单（免打字交互，双风格统一布局） ---------- */
+.rubric-overview-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.rob-hint {
+  font-size: 11.5px;
+  color: var(--text-3);
+  font-weight: 600;
+}
+.rob-btns {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mod-row {
+  padding: 0;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.mod-row.expanded {
+  border-color: color-mix(in srgb, var(--mc) 45%, var(--border));
+}
+.mod-row-head {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.mod-sub-split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.mod-split-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mod-split-tag strong {
+  color: var(--text-2);
+  font-weight: 700;
+}
+.mod-split-tag.full strong {
+  color: #12994a;
+}
+.mod-expand-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-2);
+  padding: 1.5px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.rubric-drawer {
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 65%, transparent);
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  animation: rubricReveal 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes rubricReveal {
+  from { opacity: 0; transform: translate3d(0, -6px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.rubric-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px dashed var(--border-strong);
+  margin-bottom: 7px;
+}
+.rubric-sec-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.rubric-sec-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.rubric-sec-badge.full { color: #12994a; }
+
+.rubric-items-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rubric-item {
+  padding: 9px 10px;
+  border-radius: 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rubric-item.is-filled {
+  border-color: color-mix(in srgb, var(--mc) 38%, var(--border));
+}
+.rubric-item.is-deduct {
+  border-color: rgba(220, 38, 38, 0.36);
+}
+.rb-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rb-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.35;
+}
+.rb-score-badge {
+  flex-shrink: 0;
+  padding: 1.5px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: var(--surface-2);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.rb-score-badge.pos {
+  background: #e7f8ee;
+  color: #12994a;
+}
+.rb-score-badge.neg {
+  background: rgba(239, 68, 68, 0.14);
+  color: #dc2626;
+}
+.rb-hint {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.4;
+}
+.rb-act-note {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #2563eb;
+}
+.rb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.rb-chip {
+  padding: 4.5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.18s cubic-bezier(0.34, 1.5, 0.64, 1), background-color 0.14s ease, color 0.14s ease;
+}
+.rb-chip:active {
+  transform: scale(0.94);
+}
+.rb-chip.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: transparent;
+}
+.rb-chip.danger.active {
+  background: #dc2626;
+  color: #fff;
+  border-color: transparent;
+}
+
+.rb-stepper-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rb-stepper {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  padding: 2px;
+  gap: 2px;
+}
+.rb-step-btn {
+  width: 26px;
+  height: 24px;
+  border-radius: 999px;
+  border: none;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+.rb-step-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.rb-step-btn:active:not(:disabled) {
+  transform: scale(0.9);
+}
+.rb-step-val {
+  min-width: 64px;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 750;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  padding: 0 5px;
+}
+.rb-half-btn {
+  padding: 4.5px 9px;
+  border-radius: 999px;
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.rb-half-btn.active {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+  border-style: solid;
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+/* 零打字点选补录弹窗专用控件 */
+.mc-dialog {
+  max-width: 460px;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.mc-mod-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mc-collective-wrap {
+  margin-top: 6px;
+}
+.mc-auto-preview {
+  padding: 9px 12px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface-2));
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mc-custom-details {
+  border: 1px dashed var(--border-strong);
+  border-radius: 11px;
+  padding: 8px 11px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.mc-custom-details summary {
+  cursor: pointer;
+  font-weight: 650;
+  user-select: none;
+}
+.mc-custom-body {
+  margin-top: 10px;
+}
+.rec-score-pill.neg {
+  background: rgba(239, 68, 68, 0.14);
+  color: #dc2626;
+}
+
 .manual-quick-box {
   padding: 12px 13px;
   border-radius: 14px;
