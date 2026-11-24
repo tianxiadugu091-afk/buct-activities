@@ -99,11 +99,62 @@ html[data-ui='minimal'] .auth-intro-title {
 }
 
 html[data-ui='minimal'] .topbar {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: saturate(190%) blur(20px);
+  -webkit-backdrop-filter: saturate(190%) blur(20px);
+  transition: background-color 0.24s ease, box-shadow 0.24s ease;
+}
+
+html[data-ui='minimal'] body.is-scrolled .topbar {
   background: rgba(255, 255, 255, 0.88);
 }
 
 html[data-ui='minimal'] .filter-bar {
-  background: rgba(242, 242, 241, 0.86);
+  background: rgba(242, 242, 241, 0.76);
+  backdrop-filter: saturate(185%) blur(18px);
+  -webkit-backdrop-filter: saturate(185%) blur(18px);
+  transition: background-color 0.24s ease, box-shadow 0.24s ease;
+}
+
+html[data-ui='minimal'] .act-card {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 0 0 1px rgba(23, 23, 23, 0.06),
+    0 12px 28px -14px rgba(23, 23, 23, 0.11);
+}
+
+html[data-ui='minimal'] .sheet-panel {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: saturate(195%) blur(26px);
+  -webkit-backdrop-filter: saturate(195%) blur(26px);
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.96) inset,
+    0 -18px 46px rgba(15, 23, 42, 0.22);
+}
+
+html[data-ui='minimal'] .rm-dialog {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(190%) blur(24px);
+  -webkit-backdrop-filter: saturate(190%) blur(24px);
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 24px 54px -12px rgba(15, 23, 42, 0.28);
+}
+
+html[data-ui='minimal'] .ui-style-switch .liquid-pill-bg,
+html[data-ui='minimal'] .chip-row .liquid-pill-bg {
+  background: #0e1116;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 6px 16px -6px rgba(14, 17, 22, 0.42);
+}
+
+html[data-ui='minimal'] .mod-fill {
+  transition: width 0.56s cubic-bezier(0.32, 1.25, 0.45, 1);
 }
 
 html[data-ui='minimal'] .search-mini {
@@ -191,8 +242,41 @@ html[data-ui='minimal'][data-theme='dark'] .rec-item {
 }
 
 html[data-ui='minimal'][data-theme='dark'] .act-card {
-  background: #111114;
+  background: rgba(17, 17, 20, 0.92);
   border-color: #2a2a30;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+html[data-ui='minimal'][data-theme='dark'] .sheet-panel,
+html[data-ui='minimal'][data-theme='dark'] .rm-dialog {
+  background: rgba(17, 17, 20, 0.9);
+  border-color: #2a2a30;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 -18px 46px rgba(0, 0, 0, 0.55);
+}
+
+html[data-ui='minimal'][data-theme='dark'] .glass-toast {
+  background: rgba(20, 20, 24, 0.88);
+  border-color: rgba(201, 243, 12, 0.36);
+  color: #f4f4f5;
+  box-shadow: 0 14px 36px -10px rgba(0, 0, 0, 0.7);
+}
+
+html[data-ui='minimal'][data-theme='dark'] .glass-toast::before {
+  background: #c9f30c;
+}
+
+html[data-ui='minimal'][data-theme='dark'] .ui-style-switch .liquid-pill-bg,
+html[data-ui='minimal'][data-theme='dark'] .chip-row .liquid-pill-bg {
+  background: #c9f30c;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+html[data-ui='minimal'][data-theme='dark'] .credit-tabs .liquid-pill-bg,
+html[data-ui='minimal'][data-theme='dark'] .auth-mode-tabs .liquid-pill-bg {
+  background: #18181c;
+  border: 1px solid #2a2a30;
+  border-radius: 4px;
 }
 
 html[data-ui='minimal'][data-theme='dark'] .act-card:hover {
@@ -390,6 +474,9 @@ html[data-ui='pixel'] .rec-score-pill,
 html[data-ui='pixel'] .rec-del-btn,
 html[data-ui='pixel'] .rm-dialog,
 html[data-ui='pixel'] .rm-quick-btn,
+html[data-ui='pixel'] .glass-toast,
+html[data-ui='pixel'] .glass-toast::before,
+html[data-ui='pixel'] .liquid-pill-bg,
 html[data-ui='pixel'] .poster-stage,
 html[data-ui='pixel'] .poster-img,
 html[data-ui='pixel'] .back-top,
@@ -699,6 +786,46 @@ html[data-ui='pixel'] .credit-rank-pill {
   color: #1c1c1c;
   border: 2px solid var(--px-ink);
   box-shadow: var(--px-bevel-gold);
+}
+
+/* 像素版浮空 RPG 气泡横幅 & 像素滑块指示条 */
+html[data-ui='pixel'] .glass-toast {
+  background: var(--surface);
+  color: var(--text);
+  border: 3px solid var(--px-ink);
+  box-shadow: var(--px-bevel-light), 4px 4px 0 0 var(--px-ink);
+}
+
+html[data-ui='pixel'] .glass-toast.tone-success {
+  background: var(--px-gold);
+  color: #1c1c1c;
+  box-shadow: var(--px-bevel-gold), 4px 4px 0 0 var(--px-ink);
+}
+
+html[data-ui='pixel'] .glass-toast.tone-success::before {
+  background: #2fa84f;
+  box-shadow: none;
+}
+
+html[data-ui='pixel'] .ui-style-switch .liquid-pill-bg,
+html[data-ui='pixel'] .chip-row .liquid-pill-bg,
+html[data-ui='pixel'] .credit-tabs .liquid-pill-bg,
+html[data-ui='pixel'] .auth-mode-tabs .liquid-pill-bg {
+  background: var(--primary);
+  box-shadow: var(--px-bevel-primary);
+}
+
+html[data-ui='pixel'] .chip-row .liquid-pill-bg {
+  border: 2px solid var(--px-ink);
+  box-shadow: var(--px-bevel-primary), 2px 2px 0 0 var(--px-ink);
+}
+
+html[data-ui='pixel'] .chip.active,
+html[data-ui='pixel'] .credit-tab.active,
+html[data-ui='pixel'] .auth-tab.active,
+html[data-ui='pixel'] .ui-sw-btn.active {
+  color: #ffffff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
 }
 
 @media (max-width: 720px) {
