@@ -1,10 +1,10 @@
 /* =====================================================================
-   北化二课活动 · 双风格设计语言系统
-   1) Minimal 简约版：融合 Cirrus + Fairweather + Halcyon（暗色融合 Grid）
-   2) Pixel 像素悬赏版：融合 Spritecraft + OVERWORLD 16-bit 悬赏任务板
+   北化二课活动 · 双风格设计语言系统（精炼版）
+   1) Minimal 简约版：Cirrus + Fairweather + Halcyon（暗色：Grid）
+   2) Pixel 像素悬赏版：Spritecraft + OVERWORLD 16-bit 悬赏任务板
    ===================================================================== */
 
-/* ---------- 顶栏双风格切换控件 ---------- */
+/* ---------- 顶栏双风格切换 ---------- */
 .ui-style-switch {
   display: inline-flex;
   align-items: center;
@@ -27,8 +27,7 @@
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: background-color 0.16s ease, color 0.16s ease, transform 0.1s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .ui-sw-btn.active {
@@ -51,215 +50,97 @@
   white-space: nowrap;
   flex-shrink: 0;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 
-@media (max-width: 600px) {
-  .ui-style-switch {
-    display: none;
-  }
-  .ui-style-mobile-btn {
-    display: inline-flex;
-  }
+@media (max-width: 620px) {
+  .ui-style-switch { display: none; }
+  .ui-style-mobile-btn { display: inline-flex; }
 }
 
-/* 像素悬赏专属元素默认在简约版中隐藏 */
-.quest-hud,
-.ow-staircase,
-.quest-rank-tag,
-.quest-cleared-badge {
+/* 像素专属组件默认在简约版隐藏 */
+.quest-slim-bar,
+.quest-rank-tag {
   display: none;
 }
 
 /* =====================================================================
-   STYLE 1 · MINIMAL 简约版（Cirrus + Fairweather + Halcyon / Dark: Grid）
+   STYLE 1 · MINIMAL 简约版（Cirrus + Fairweather + Halcyon）
    ===================================================================== */
 html[data-ui='minimal'] body.home {
   --bg: #f2f2f1;
   --surface: #ffffff;
-  --surface-2: #ececea;
+  --surface-2: #f4f4f2;
   --text: #0e1116;
   --text-2: #5b6472;
   --text-3: #8a93a3;
-  --border: rgba(23, 23, 23, 0.09);
-  --border-strong: rgba(23, 23, 23, 0.18);
+  --border: rgba(23, 23, 23, 0.08);
+  --border-strong: rgba(23, 23, 23, 0.16);
   --primary: #0e1116;
-  --signal-green: #1db954;
-  --signal-green-text: #12994a;
-  --shadow-card: 0 1px 2px rgba(23, 23, 23, 0.04), 0 12px 30px -14px rgba(23, 23, 23, 0.11);
-  --shadow-hover: 0 1px 2px rgba(23, 23, 23, 0.05), 0 20px 38px -16px rgba(23, 23, 23, 0.16);
+  --shadow-card: 0 1px 2px rgba(23, 23, 23, 0.04), 0 12px 28px -14px rgba(23, 23, 23, 0.1);
+  --shadow-hover: 0 1px 2px rgba(23, 23, 23, 0.05), 0 20px 36px -16px rgba(23, 23, 23, 0.15);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   background-color: #f2f2f1;
-  /* Fairweather 8px 点阵底 + Halcyon 柔和四色极光顶晕 */
   background-image:
-    radial-gradient(52% 28% at 18% 0%, rgba(255, 213, 189, 0.42) 0%, transparent 72%),
-    radial-gradient(46% 26% at 45% 0%, rgba(248, 176, 204, 0.32) 0%, transparent 72%),
-    radial-gradient(48% 28% at 72% 0%, rgba(193, 147, 245, 0.28) 0%, transparent 72%),
-    radial-gradient(50% 26% at 92% 0%, rgba(159, 223, 251, 0.36) 0%, transparent 72%),
+    radial-gradient(50% 26% at 18% 0%, rgba(255, 213, 189, 0.42) 0%, transparent 72%),
+    radial-gradient(45% 24% at 48% 0%, rgba(248, 176, 204, 0.3) 0%, transparent 72%),
+    radial-gradient(45% 24% at 75% 0%, rgba(193, 147, 245, 0.25) 0%, transparent 72%),
+    radial-gradient(50% 24% at 94% 0%, rgba(159, 223, 251, 0.36) 0%, transparent 72%),
     radial-gradient(circle at 1px 1px, #dcdcd9 1px, transparent 1.2px);
-  background-size: 100% 420px, 100% 420px, 100% 420px, 100% 420px, 8px 8px;
+  background-size: 100% 400px, 100% 400px, 100% 400px, 100% 400px, 8px 8px;
   background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
-}
-
-html[data-ui='minimal'] .brand-logo {
-  background: #0e1116;
-  border-radius: 999px;
 }
 
 html[data-ui='minimal'] .brand-name,
 html[data-ui='minimal'] .act-title,
 html[data-ui='minimal'] .ds-title,
-html[data-ui='minimal'] .deck-title {
+html[data-ui='minimal'] .auth-intro-title {
   font-family: 'Inter Tight', 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   letter-spacing: -0.015em;
 }
 
 html[data-ui='minimal'] .topbar {
   background: rgba(255, 255, 255, 0.88);
-  border-bottom: 1px solid var(--border);
 }
 
 html[data-ui='minimal'] .filter-bar {
   background: rgba(242, 242, 241, 0.86);
-  border-bottom: 1px solid var(--border);
 }
 
 html[data-ui='minimal'] .search-mini {
   background: #ffffff;
-  border: 1px solid var(--border);
-  box-shadow: 0 1px 2px rgba(23, 23, 23, 0.03);
 }
 
-html[data-ui='minimal'] .search-mini:focus-within {
-  border-color: #2e7def;
-  box-shadow: 0 0 0 3px rgba(46, 125, 239, 0.22);
-  color: #2e7def;
-}
-
-html[data-ui='minimal'] .fresh-dot-pill {
-  background: #e7f8ee;
-  color: #12994a;
-}
-
-html[data-ui='minimal'] .fresh-dot-pill .live-dot {
-  background: #1db954;
-}
-
-/* Cirrus / Fairweather 极简卡片：干净留白、细边柔影、去除杂乱背景光晕 */
-html[data-ui='minimal'] .act-card {
-  border-radius: 22px;
-  background-color: #ffffff;
-  background-image: none;
-  border: 1px solid rgba(23, 23, 23, 0.08);
-  box-shadow: var(--shadow-card);
-}
-
-html[data-ui='minimal'] .act-card::before {
-  height: 2.5px;
-  opacity: 0.82;
-}
-
-html[data-ui='minimal'] .act-card.is-hot {
-  border-color: rgba(23, 23, 23, 0.16);
-  box-shadow: 0 1px 2px rgba(23, 23, 23, 0.05), 0 16px 32px -16px rgba(197, 25, 124, 0.22);
-}
-
-html[data-ui='minimal'] .act-card.is-hot::before {
-  height: 3px;
-  background: linear-gradient(90deg, #c5197c, #ff7a3d, #2e7def, #c5197c);
-  background-size: 200% 100%;
-}
-
-/* Cirrus 签名：当前激活分类标签使用高级墨黑药丸 */
 html[data-ui='minimal'] .chip {
   background: #ffffff;
-  border-color: rgba(23, 23, 23, 0.09);
   color: #222b36;
-  box-shadow: 0 1px 2px rgba(23, 23, 23, 0.03);
 }
 
 html[data-ui='minimal'] .chip.active {
   background: #0e1116;
   color: #ffffff;
-  border-color: #0e1116;
-  box-shadow: 0 2px 8px -2px rgba(14, 17, 22, 0.28);
 }
 
-/* Fairweather 键帽按压手感按钮 */
 html[data-ui='minimal'] .icon-btn,
-html[data-ui='minimal'] .remind-btn,
-html[data-ui='minimal'] .star-btn,
+html[data-ui='minimal'] .account-pill-btn,
 html[data-ui='minimal'] .mobile-filter-btn {
   background: #ffffff;
-  border: 1px solid rgba(23, 23, 23, 0.14);
+  border-color: rgba(23, 23, 23, 0.14);
   box-shadow: 0 2px 0 #d9d9d6;
 }
 
 html[data-ui='minimal'] .icon-btn:active,
-html[data-ui='minimal'] .remind-btn:active,
-html[data-ui='minimal'] .star-btn:active,
+html[data-ui='minimal'] .account-pill-btn:active,
 html[data-ui='minimal'] .mobile-filter-btn:active {
   transform: translateY(1px);
   box-shadow: 0 1px 0 #d9d9d6;
 }
 
-html[data-ui='minimal'] .time-box {
-  background: #f6f7f9;
-  border-color: rgba(23, 23, 23, 0.06);
+html[data-ui='minimal'] .act-card.is-hot::before {
+  height: 3px;
+  background: linear-gradient(90deg, #c5197c, #ff7a3d, #2e7def);
 }
 
-html[data-ui='minimal'] .time-val.reg-highlight {
-  color: #2e7def;
-}
-
-html[data-ui='minimal'] .act-link {
-  border-radius: 999px;
-  background: #0e1116;
-  color: #ffffff;
-  padding: 5px 12px;
-}
-
-html[data-ui='minimal'] .act-link:hover {
-  background: #222b36;
-  color: #ffffff;
-}
-
-html[data-ui='minimal'] .ui-sw-btn.active {
-  background: #0e1116;
-  color: #ffffff;
-}
-
-html[data-ui='minimal'] .sheet-panel {
-  border-radius: 26px 26px 0 0;
-}
-
-@media (min-width: 721px) {
-  html[data-ui='minimal'] .sheet-panel {
-    border-radius: 24px;
-  }
-}
-
-html[data-ui='minimal'] .sheet-btn {
-  border-radius: 999px;
-}
-
-html[data-ui='minimal'] .sheet-btn-primary {
-  background: #0e1116;
-  color: #ffffff;
-}
-
-html[data-ui='minimal'] .radar-wrap {
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(23, 23, 23, 0.09);
-  box-shadow: 0 1px 2px rgba(23, 23, 23, 0.04), 0 10px 26px -14px rgba(23, 23, 23, 0.14);
-}
-
-html[data-ui='minimal'] .radar-badge {
-  background: #c5197c;
-}
-
-/* ---------- MINIMAL 暗黑模式（致敬 DL-013 Grid：黑金极简结构 + Acid Lime Signal） ---------- */
+/* ---------- MINIMAL 暗色模式（Grid 极简暗黑网格 + Acid Lime） ---------- */
 html[data-ui='minimal'][data-theme='dark'] body.home {
   --bg: #0a0a0b;
   --surface: #111114;
@@ -274,8 +155,8 @@ html[data-ui='minimal'][data-theme='dark'] body.home {
   --shadow-hover: none;
   background-color: #0a0a0b;
   background-image:
-    linear-gradient(to right, rgba(42, 42, 48, 0.35) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(42, 42, 48, 0.35) 1px, transparent 1px);
+    linear-gradient(to right, rgba(42, 42, 48, 0.34) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(42, 42, 48, 0.34) 1px, transparent 1px);
   background-size: 64px 64px;
   background-repeat: repeat;
 }
@@ -283,63 +164,62 @@ html[data-ui='minimal'][data-theme='dark'] body.home {
 html[data-ui='minimal'][data-theme='dark'] .topbar,
 html[data-ui='minimal'][data-theme='dark'] .filter-bar {
   background: rgba(10, 10, 11, 0.92);
-  border-bottom-color: #2a2a30;
 }
 
 html[data-ui='minimal'][data-theme='dark'] .brand-logo {
   background: #c9f30c;
   color: #0a0a0b;
-  border-radius: 2px;
+  border-radius: 3px;
 }
 
-html[data-ui='minimal'][data-theme='dark'] .search-mini {
-  background: #111114;
-  border-color: #2a2a30;
-  border-radius: 6px;
-}
-
-html[data-ui='minimal'][data-theme='dark'] .search-mini:focus-within {
-  border-color: #c9f30c;
-  box-shadow: 0 0 0 2px rgba(201, 243, 12, 0.25);
-  color: #c9f30c;
+html[data-ui='minimal'][data-theme='dark'] .act-card,
+html[data-ui='minimal'][data-theme='dark'] .search-mini,
+html[data-ui='minimal'][data-theme='dark'] .chip,
+html[data-ui='minimal'][data-theme='dark'] .icon-btn,
+html[data-ui='minimal'][data-theme='dark'] .account-pill-btn,
+html[data-ui='minimal'][data-theme='dark'] .mobile-filter-btn,
+html[data-ui='minimal'][data-theme='dark'] .ui-style-switch,
+html[data-ui='minimal'][data-theme='dark'] .ui-sw-btn,
+html[data-ui='minimal'][data-theme='dark'] .ui-style-mobile-btn,
+html[data-ui='minimal'][data-theme='dark'] .select-wrap select,
+html[data-ui='minimal'][data-theme='dark'] .sheet-btn,
+html[data-ui='minimal'][data-theme='dark'] .credit-hero-card,
+html[data-ui='minimal'][data-theme='dark'] .mod-row,
+html[data-ui='minimal'][data-theme='dark'] .rec-item {
+  border-radius: 5px;
+  box-shadow: none;
 }
 
 html[data-ui='minimal'][data-theme='dark'] .act-card {
-  border-radius: 6px;
   background: #111114;
-  border: 1px solid #2a2a30;
-  box-shadow: none;
+  border-color: #2a2a30;
 }
 
 html[data-ui='minimal'][data-theme='dark'] .act-card:hover {
   background: #18181c;
   transform: none;
   border-color: #52525b;
-  box-shadow: none;
-}
-
-html[data-ui='minimal'][data-theme='dark'] .act-card.is-hot {
-  border-color: #c9f30c;
-  box-shadow: none;
 }
 
 html[data-ui='minimal'][data-theme='dark'] .act-card.is-hot::before {
   background: #c9f30c;
-  animation: none;
 }
 
 html[data-ui='minimal'][data-theme='dark'] .chip {
-  border-radius: 4px;
   background: #111114;
-  border-color: #2a2a30;
   color: #a1a1aa;
-  box-shadow: none;
 }
 
-html[data-ui='minimal'][data-theme='dark'] .chip.active {
+html[data-ui='minimal'][data-theme='dark'] .chip.active,
+html[data-ui='minimal'][data-theme='dark'] .ui-sw-btn.active,
+html[data-ui='minimal'][data-theme='dark'] .sheet-btn-primary,
+html[data-ui='minimal'][data-theme='dark'] .ds-step-btn.primary,
+html[data-ui='minimal'][data-theme='dark'] .mini-pill-btn.primary,
+html[data-ui='minimal'][data-theme='dark'] .fs-pill.active,
+html[data-ui='minimal'][data-theme='dark'] .rm-quick-btn.active,
+html[data-ui='minimal'][data-theme='dark'] .credit-avatar {
   background: #c9f30c;
   color: #0a0a0b;
-  border-color: #c9f30c;
 }
 
 html[data-ui='minimal'][data-theme='dark'] .chip.active .chip-dot {
@@ -347,84 +227,42 @@ html[data-ui='minimal'][data-theme='dark'] .chip.active .chip-dot {
 }
 
 html[data-ui='minimal'][data-theme='dark'] .icon-btn,
-html[data-ui='minimal'][data-theme='dark'] .remind-btn,
-html[data-ui='minimal'][data-theme='dark'] .star-btn,
-html[data-ui='minimal'][data-theme='dark'] .mobile-filter-btn {
-  border-radius: 4px;
+html[data-ui='minimal'][data-theme='dark'] .account-pill-btn,
+html[data-ui='minimal'][data-theme='dark'] .mobile-filter-btn,
+html[data-ui='minimal'][data-theme='dark'] .search-mini {
   background: #111114;
   border-color: #2a2a30;
-  box-shadow: none;
 }
 
-html[data-ui='minimal'][data-theme='dark'] .ui-style-switch,
-html[data-ui='minimal'][data-theme='dark'] .ui-style-mobile-btn {
-  border-radius: 4px;
-}
-
-html[data-ui='minimal'][data-theme='dark'] .ui-sw-btn {
-  border-radius: 3px;
-}
-
-html[data-ui='minimal'][data-theme='dark'] .ui-sw-btn.active {
-  background: #c9f30c;
-  color: #0a0a0b;
-}
-
-html[data-ui='minimal'][data-theme='dark'] .time-box {
-  border-radius: 4px;
-  background: #18181c;
-  border-color: #2a2a30;
-}
-
+html[data-ui='minimal'][data-theme='dark'] .act-time-brief.hi,
 html[data-ui='minimal'][data-theme='dark'] .time-val.reg-highlight {
   color: #c9f30c;
 }
 
-html[data-ui='minimal'][data-theme='dark'] .act-link,
-html[data-ui='minimal'][data-theme='dark'] .sheet-btn-primary {
-  border-radius: 4px;
-  background: #c9f30c;
-  color: #0a0a0b;
+html[data-ui='minimal'][data-theme='dark'] .reg-pill.open,
+html[data-ui='minimal'][data-theme='dark'] .meta-chip.aud-all,
+html[data-ui='minimal'][data-theme='dark'] .my-state-tag.done,
+html[data-ui='minimal'][data-theme='dark'] .rec-score-pill {
+  background: rgba(29, 185, 84, 0.15);
+  color: #4ade80;
 }
 
-html[data-ui='minimal'][data-theme='dark'] .fresh-dot-pill {
-  background: rgba(201, 243, 12, 0.14);
+html[data-ui='minimal'][data-theme='dark'] .reg-pill.low_stock {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+}
+
+html[data-ui='minimal'][data-theme='dark'] .fresh-live-dot,
+html[data-ui='minimal'][data-theme='dark'] .fresh-dot-inline .live-dot {
+  background: #c9f30c;
+}
+
+html[data-ui='minimal'][data-theme='dark'] .fresh-dot-inline {
   color: #c9f30c;
-  border-radius: 4px;
-}
-
-html[data-ui='minimal'][data-theme='dark'] .fresh-dot-pill .live-dot {
-  background: #c9f30c;
-}
-
-html[data-ui='minimal'][data-theme='dark'] .radar-wrap {
-  border-radius: 6px;
-  background: #111114;
-  border-color: #2a2a30;
-}
-
-html[data-ui='minimal'][data-theme='dark'] .radar-badge {
-  border-radius: 3px;
-  background: #c9f30c;
-  color: #0a0a0b;
-}
-
-html[data-ui='minimal'][data-theme='dark'] .radar-pulse {
-  background: #0a0a0b;
-}
-
-@media (max-width: 720px) {
-  html[data-ui='minimal'] .act-card {
-    border-radius: 16px;
-  }
-  html[data-ui='minimal'][data-theme='dark'] .act-card {
-    border-radius: 4px;
-  }
 }
 
 /* =====================================================================
-   STYLE 2 · PIXEL 像素悬赏版（Spritecraft + OVERWORLD 16-bit 悬赏任务板）
-   Zero radius · Hard ink outlines · 4-sided 8-bit bevels · Solid shadows
+   STYLE 2 · PIXEL 像素悬赏版（Spritecraft + OVERWORLD 16-bit 悬赏板）
    ===================================================================== */
 html[data-ui='pixel'] body.home {
   --bg: #f4e9c8;
@@ -438,12 +276,8 @@ html[data-ui='pixel'] body.home {
   --primary: #2fa84f;
   --px-ink: #1c1c1c;
   --px-gold: #f0a232;
-  --px-gold-hi: #ffd27a;
-  --px-gold-lo: #8a5510;
   --px-cobalt: #2e5dd6;
-  --px-cyan: #3aa0e6;
   --px-red: #e2522e;
-  --px-moss: #2f6e4f;
   --px-bevel-primary:
     0 -3px rgba(21, 108, 0, 0.55) inset,
     0 3px rgba(108, 221, 108, 0.95) inset,
@@ -455,28 +289,25 @@ html[data-ui='pixel'] body.home {
     -3px 0 rgba(255, 210, 122, 0.55) inset,
     3px 0 rgba(138, 85, 16, 0.55) inset;
   --px-bevel-light:
-    0 -3px rgba(109, 85, 38, 0.28) inset,
+    0 -3px rgba(109, 85, 38, 0.25) inset,
     0 3px rgba(255, 255, 255, 0.78) inset,
     -3px 0 rgba(255, 255, 255, 0.4) inset,
-    3px 0 rgba(109, 85, 38, 0.25) inset;
+    3px 0 rgba(109, 85, 38, 0.22) inset;
   --px-bevel-sunken:
     0 3px rgba(28, 28, 28, 0.24) inset,
     0 -3px rgba(255, 255, 255, 0.55) inset,
     3px 0 rgba(28, 28, 28, 0.16) inset,
     -3px 0 rgba(255, 255, 255, 0.3) inset;
-  --shadow-card: var(--px-bevel-light), 5px 5px 0 0 var(--px-ink);
-  --shadow-hover: var(--px-bevel-light), 7px 7px 0 0 var(--px-ink);
+  --shadow-card: var(--px-bevel-light), 4px 4px 0 0 var(--px-ink);
+  --shadow-hover: var(--px-bevel-light), 6px 6px 0 0 var(--px-ink);
   background-color: var(--bg);
-  /* Spritecraft 16px 像素羊皮纸格 + OVERWORLD 16-bit 纸纹点缀 */
   background-image:
     linear-gradient(to right, rgba(109, 85, 38, 0.085) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(109, 85, 38, 0.085) 1px, transparent 1px),
-    radial-gradient(rgba(28, 28, 28, 0.05) 1px, transparent 1px);
+    radial-gradient(rgba(28, 28, 28, 0.045) 1px, transparent 1px);
   background-size: 20px 20px, 20px 20px, 4px 4px;
-  background-repeat: repeat;
 }
 
-/* 像素夜酒馆暗色模式 */
 html[data-ui='pixel'][data-theme='dark'] body.home {
   --bg: #171410;
   --surface: #241f19;
@@ -497,8 +328,8 @@ html[data-ui='pixel'][data-theme='dark'] body.home {
     0 -3px rgba(255, 232, 185, 0.1) inset,
     3px 0 rgba(0, 0, 0, 0.45) inset,
     -3px 0 rgba(255, 232, 185, 0.06) inset;
-  --shadow-card: var(--px-bevel-light), 5px 5px 0 0 #050403;
-  --shadow-hover: var(--px-bevel-light), 7px 7px 0 0 #050403;
+  --shadow-card: var(--px-bevel-light), 4px 4px 0 0 #050403;
+  --shadow-hover: var(--px-bevel-light), 6px 6px 0 0 #050403;
   background-color: #171410;
   background-image:
     linear-gradient(to right, rgba(240, 162, 50, 0.055) 1px, transparent 1px),
@@ -506,12 +337,12 @@ html[data-ui='pixel'][data-theme='dark'] body.home {
   background-size: 20px 20px;
 }
 
-/* 像素风格铁律：全局 0 圆角、无模糊玻璃 */
+/* 像素铁律：全局 0 圆角、无玻璃模糊 */
 html[data-ui='pixel'] .topbar,
 html[data-ui='pixel'] .filter-bar,
 html[data-ui='pixel'] .brand-logo,
 html[data-ui='pixel'] .search-mini,
-html[data-ui='pixel'] .fresh-dot-pill,
+html[data-ui='pixel'] .account-pill-btn,
 html[data-ui='pixel'] .icon-btn,
 html[data-ui='pixel'] .ui-style-switch,
 html[data-ui='pixel'] .ui-sw-btn,
@@ -521,39 +352,44 @@ html[data-ui='pixel'] .chip-dot,
 html[data-ui='pixel'] .mobile-filter-btn,
 html[data-ui='pixel'] .mf-badge,
 html[data-ui='pixel'] .select-wrap select,
-html[data-ui='pixel'] .radar-wrap,
-html[data-ui='pixel'] .radar-badge,
-html[data-ui='pixel'] .radar-pill,
 html[data-ui='pixel'] .act-card,
-html[data-ui='pixel'] .act-tag,
-html[data-ui='pixel'] .act-tag::before,
+html[data-ui='pixel'] .act-cat-pill::before,
 html[data-ui='pixel'] .reg-pill,
 html[data-ui='pixel'] .reg-pill::before,
-html[data-ui='pixel'] .audience-badge,
-html[data-ui='pixel'] .time-box,
-html[data-ui='pixel'] .avatar,
-html[data-ui='pixel'] .star-btn,
-html[data-ui='pixel'] .remind-btn,
-html[data-ui='pixel'] .act-link,
-html[data-ui='pixel'] .deck-card,
-html[data-ui='pixel'] .deck-act-btn,
-html[data-ui='pixel'] .deck-nav-btn,
-html[data-ui='pixel'] .deck-progress-bar,
-html[data-ui='pixel'] .deck-progress-fill,
-html[data-ui='pixel'] .fav-dock,
-html[data-ui='pixel'] .fav-dock-btn,
-html[data-ui='pixel'] .fav-dock-count,
-html[data-ui='pixel'] .fav-dock-clear,
+html[data-ui='pixel'] .meta-chip,
+html[data-ui='pixel'] .my-state-tag,
 html[data-ui='pixel'] .sheet-panel,
 html[data-ui='pixel'] .sheet-handle,
 html[data-ui='pixel'] .sheet-btn,
 html[data-ui='pixel'] .fs-pill,
 html[data-ui='pixel'] .fs-switch-row,
+html[data-ui='pixel'] .fs-pref-btn,
 html[data-ui='pixel'] .ds-credit-card,
 html[data-ui='pixel'] .ds-time-card,
 html[data-ui='pixel'] .ds-source-card,
+html[data-ui='pixel'] .ds-progress-box,
+html[data-ui='pixel'] .ds-step-btn,
 html[data-ui='pixel'] .ds-tool-chip,
+html[data-ui='pixel'] .avatar,
+html[data-ui='pixel'] .auth-mode-tabs,
+html[data-ui='pixel'] .auth-tab,
+html[data-ui='pixel'] .credit-hero-card,
+html[data-ui='pixel'] .credit-avatar,
+html[data-ui='pixel'] .credit-rank-pill,
+html[data-ui='pixel'] .mini-pill-btn,
+html[data-ui='pixel'] .pending-settle-box,
+html[data-ui='pixel'] .credit-tabs,
+html[data-ui='pixel'] .credit-tab,
+html[data-ui='pixel'] .mod-row,
+html[data-ui='pixel'] .mod-dot,
+html[data-ui='pixel'] .manual-quick-box,
+html[data-ui='pixel'] .mq-chip,
+html[data-ui='pixel'] .mini-select,
+html[data-ui='pixel'] .rec-item,
+html[data-ui='pixel'] .rec-score-pill,
+html[data-ui='pixel'] .rec-del-btn,
 html[data-ui='pixel'] .rm-dialog,
+html[data-ui='pixel'] .rm-quick-btn,
 html[data-ui='pixel'] .poster-stage,
 html[data-ui='pixel'] .poster-img,
 html[data-ui='pixel'] .back-top,
@@ -565,50 +401,113 @@ html[data-ui='pixel'] .sk {
   -webkit-backdrop-filter: none !important;
 }
 
-/* 像素顶栏 & 品牌徽章 */
+/* 像素 44px 超薄冒险者状态条（替代旧版 200px 大面板） */
+html[data-ui='pixel'] .quest-slim-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 12px;
+  margin-bottom: 14px;
+  background: var(--surface);
+  border: 3px solid var(--px-ink);
+  box-shadow: var(--px-bevel-light), 4px 4px 0 0 var(--px-ink);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+html[data-ui='pixel'] .quest-slim-bar:active {
+  transform: translate(3px, 3px);
+  box-shadow: var(--px-bevel-light);
+}
+
+.qsb-left,
+.qsb-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.qsb-rank {
+  padding: 2px 8px;
+  background: var(--px-gold);
+  color: #1c1c1c;
+  border: 2px solid var(--px-ink);
+  box-shadow: var(--px-bevel-gold);
+  font-family: 'Silkscreen', 'PingFang SC', monospace;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.qsb-cells {
+  display: inline-grid;
+  grid-template-columns: repeat(10, 8px);
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 2px solid var(--px-ink);
+}
+
+.qsb-cell {
+  width: 8px;
+  height: 10px;
+  background: rgba(28, 28, 28, 0.13);
+}
+
+.qsb-cell.filled {
+  background: #2fa84f;
+  box-shadow: inset 0 2px #6cdd6c;
+}
+
+.qsb-score {
+  font-family: 'Pixelify Sans', 'VT323', 'PingFang SC', monospace;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.qsb-arrow {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+/* 像素顶栏与控件 */
 html[data-ui='pixel'] .topbar {
   background: var(--surface);
   border-bottom: 3px solid var(--px-ink);
-  box-shadow: 0 3px 0 0 rgba(28, 28, 28, 0.22);
 }
 
 html[data-ui='pixel'] .brand-logo {
   background: var(--px-gold);
-  color: var(--px-ink);
+  color: #1c1c1c;
   border: 2px solid var(--px-ink);
   box-shadow: var(--px-bevel-gold), 2px 2px 0 0 var(--px-ink);
-  font-family: 'Pixelify Sans', 'PingFang SC', monospace;
-}
-
-html[data-ui='pixel'] .brand-name {
-  font-family: 'Pixelify Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  letter-spacing: 0.02em;
 }
 
 html[data-ui='pixel'] .search-mini {
   background: var(--surface-2);
   border: 2px solid var(--px-ink);
   box-shadow: var(--px-bevel-sunken);
-  color: var(--text-3);
-}
-
-html[data-ui='pixel'] .search-mini:focus-within {
-  background: var(--surface);
-  border-color: var(--px-cobalt);
-  box-shadow: var(--px-bevel-sunken), 3px 3px 0 0 var(--px-cobalt);
 }
 
 html[data-ui='pixel'] .ui-style-switch {
   background: var(--surface-2);
   border: 2px solid var(--px-ink);
   box-shadow: var(--px-bevel-sunken);
-  padding: 2px;
 }
 
 html[data-ui='pixel'] .ui-sw-btn.active {
   background: var(--primary);
-  color: #ffffff;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+  color: #fff;
   box-shadow: var(--px-bevel-primary);
 }
 
@@ -619,6 +518,7 @@ html[data-ui='pixel'] .ui-style-mobile-btn {
   box-shadow: var(--px-bevel-gold), 2px 2px 0 0 var(--px-ink);
 }
 
+html[data-ui='pixel'] .account-pill-btn,
 html[data-ui='pixel'] .icon-btn,
 html[data-ui='pixel'] .mobile-filter-btn {
   background: var(--surface);
@@ -627,27 +527,12 @@ html[data-ui='pixel'] .mobile-filter-btn {
   color: var(--text);
 }
 
-html[data-ui='pixel'] .icon-btn:active,
-html[data-ui='pixel'] .mobile-filter-btn:active {
-  transform: translate(2px, 2px);
-  box-shadow: var(--px-bevel-light);
+html[data-ui='pixel'] .account-pill-btn.logged-in {
+  background: var(--px-gold);
+  color: #1c1c1c;
+  box-shadow: var(--px-bevel-gold), 2px 2px 0 0 var(--px-ink);
 }
 
-html[data-ui='pixel'] .icon-btn.view-deck-active,
-html[data-ui='pixel'] .mobile-filter-btn.has-active {
-  background: var(--primary);
-  color: #ffffff;
-  box-shadow: var(--px-bevel-primary), 2px 2px 0 0 var(--px-ink);
-}
-
-html[data-ui='pixel'] .fresh-dot-pill {
-  background: var(--surface-2);
-  border: 2px solid var(--px-ink);
-  color: var(--text);
-  font-family: 'VT323', 'PingFang SC', monospace;
-}
-
-/* 像素标签栏 */
 html[data-ui='pixel'] .filter-bar {
   background: var(--bg);
   border-bottom: 2px dashed var(--text-3);
@@ -662,15 +547,8 @@ html[data-ui='pixel'] .chip {
 
 html[data-ui='pixel'] .chip.active {
   background: var(--primary);
-  color: #ffffff;
-  border-color: var(--px-ink);
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+  color: #fff;
   box-shadow: var(--px-bevel-primary), 2px 2px 0 0 var(--px-ink);
-}
-
-html[data-ui='pixel'] .chip:active {
-  transform: translate(2px, 2px);
-  box-shadow: none;
 }
 
 html[data-ui='pixel'] .select-wrap select {
@@ -679,280 +557,21 @@ html[data-ui='pixel'] .select-wrap select {
   box-shadow: 2px 2px 0 0 var(--px-ink);
 }
 
-/* ---------- 像素悬赏公会告示板 HUD（Spritecraft 风格） ---------- */
-html[data-ui='pixel'] .quest-hud {
-  display: block;
-  margin-bottom: 12px;
-  padding: 14px 16px;
-  background: var(--surface);
-  border: 3px solid var(--px-ink);
-  box-shadow: var(--px-bevel-light), 5px 5px 0 0 var(--px-ink);
-}
-
-.quest-hud-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-bottom: 10px;
-  margin-bottom: 10px;
-  border-bottom: 2px dashed var(--text-3);
-}
-
-.quest-hud-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.quest-star-mark {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  background: var(--px-ink);
-  color: var(--px-gold);
-  border: 2px solid var(--px-ink);
-  flex-shrink: 0;
-}
-
-.quest-hud-title {
-  font-family: 'Pixelify Sans', 'Silkscreen', 'PingFang SC', sans-serif;
-  font-size: 14.5px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: 0.03em;
-  line-height: 1.2;
-}
-
-.quest-hud-sub {
-  font-size: 11.5px;
-  color: var(--text-3);
-  margin-top: 2px;
-}
-
-.quest-rank-sticker {
-  padding: 4px 10px;
-  background: var(--px-gold);
-  color: #1c1c1c;
-  border: 2px solid var(--px-ink);
-  box-shadow: var(--px-bevel-gold), 3px 3px 0 0 var(--px-ink);
-  font-family: 'Silkscreen', 'PingFang SC', monospace;
-  font-size: 11.5px;
-  font-weight: 800;
-  white-space: nowrap;
-  transform: rotate(-1.5deg);
-  flex-shrink: 0;
-}
-
-.quest-hud-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 11px;
-}
-
-.quest-stat-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 7px 6px;
-  background: var(--surface-2);
-  border: 2px solid var(--px-ink);
-  box-shadow: var(--px-bevel-sunken);
-  color: var(--text);
-  text-align: center;
-}
-
-button.quest-stat-tile {
-  cursor: pointer;
-  font-family: inherit;
-}
-
-button.quest-stat-tile:hover {
-  background: var(--surface);
-}
-
-.qs-val {
-  font-family: 'Pixelify Sans', 'VT323', monospace;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.05;
-  font-variant-numeric: tabular-nums;
-}
-
-.quest-stat-tile.is-urgent .qs-val {
-  color: var(--px-red);
-}
-
-.quest-stat-tile.is-gold .qs-val {
-  color: #c27803;
-}
-
-html[data-theme='dark'] .quest-stat-tile.is-gold .qs-val {
-  color: #fbbf24;
-}
-
-.quest-stat-tile.is-green .qs-val {
-  color: var(--primary);
-}
-
-.qs-key {
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--text-3);
-  margin-top: 2px;
-}
-
-/* Spritecraft 签名组件：Pixel Quest Bar */
-.quest-bars-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.sc-questbar {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.sc-questbar__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-family: 'Silkscreen', 'VT323', 'PingFang SC', monospace;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-3);
-  letter-spacing: 0.04em;
-}
-
-.sc-questbar__track {
-  position: relative;
-  padding: 4px;
-  background: var(--surface-2);
-  border: 2px solid var(--px-ink);
-  box-shadow: var(--px-bevel-sunken);
-  overflow: hidden;
-}
-
-.sc-questbar__track::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: repeating-linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.08) 0,
-    rgba(0, 0, 0, 0.08) 1px,
-    transparent 1px,
-    transparent 3px
-  );
-}
-
-.sc-questbar__cells {
-  display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  gap: 3px;
-  height: 14px;
-}
-
-.sc-questbar__cell {
-  background: rgba(28, 28, 28, 0.11);
-  box-shadow: inset 0 -2px rgba(0, 0, 0, 0.14);
-}
-
-.sc-questbar__cell.is-green {
-  background: #2fa84f;
-  box-shadow: inset 0 2px #6cdd6c, inset 0 -2px rgba(21, 108, 0, 0.7);
-}
-
-.sc-questbar__cell.is-gold {
-  background: #f0a232;
-  box-shadow: inset 0 2px #ffd27a, inset 0 -2px rgba(138, 85, 16, 0.7);
-}
-
-/* OVERWORLD 签名阶梯分隔线 */
-html[data-ui='pixel'] .ow-staircase {
-  display: block;
-  height: 10px;
-  width: 100%;
-  margin-bottom: 14px;
-  background-image: linear-gradient(to right, var(--px-ink) 0, var(--px-ink) 100%);
-  background-repeat: no-repeat;
-  background-size: 100% 3px;
-  background-position: 0 3.5px;
-  position: relative;
-}
-
-html[data-ui='pixel'] .ow-staircase::before,
-html[data-ui='pixel'] .ow-staircase::after {
-  content: '';
-  position: absolute;
-  inset-block: 0;
-  width: 100%;
-  background-image: repeating-linear-gradient(to right, var(--px-ink) 0 8px, transparent 8px 16px);
-  background-size: 16px 3px;
-  background-repeat: no-repeat;
-}
-
-html[data-ui='pixel'] .ow-staircase::before { top: 0; background-position: 0 0; }
-html[data-ui='pixel'] .ow-staircase::after { bottom: 0; background-position: 8px 7px; }
-
-/* 像素急抢通告带 */
-html[data-ui='pixel'] .radar-wrap {
-  background: var(--surface);
-  border: 3px solid var(--px-ink);
-  box-shadow: 4px 4px 0 0 var(--px-ink);
-  padding: 7px 10px;
-}
-
-html[data-ui='pixel'] .radar-badge {
-  background: var(--px-red);
-  color: #ffffff;
-  border: 2px solid var(--px-ink);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
-}
-
-html[data-ui='pixel'] .radar-pill {
-  background: var(--surface-2);
-  border: 2px solid var(--px-ink);
-  box-shadow: 2px 2px 0 0 var(--px-ink);
-  color: var(--text);
-}
-
-/* ---------- 像素悬赏卡片（羊皮纸委托卷轴） ---------- */
+/* 像素悬赏卡片（精炼四要素 + OVERWORLD 贴纸） */
 html[data-ui='pixel'] .act-card {
-  background-color: var(--surface);
-  background-image: none;
+  background: var(--surface);
   border: 3px solid var(--px-ink);
   box-shadow: var(--shadow-card);
   overflow: visible;
 }
 
 html[data-ui='pixel'] .act-card::before {
-  height: 5px;
-  background: var(--accent);
+  height: 4px;
   border-bottom: 2px solid var(--px-ink);
 }
 
 html[data-ui='pixel'] .act-card.is-hot {
-  border-color: var(--px-ink);
-  box-shadow: var(--px-bevel-light), 5px 5px 0 0 var(--px-red);
-}
-
-html[data-ui='pixel'] .act-card.is-hot::before {
-  height: 5px;
-  background: repeating-linear-gradient(90deg, #e2522e 0 14px, #f0a232 14px 28px);
-  animation: none;
-}
-
-html[data-ui='pixel'] .act-card.is-cleared {
-  border-color: var(--primary);
-  box-shadow: var(--px-bevel-light), 4px 4px 0 0 var(--primary);
+  box-shadow: var(--px-bevel-light), 4px 4px 0 0 var(--px-red);
 }
 
 html[data-ui='pixel'] .act-card:hover {
@@ -965,196 +584,52 @@ html[data-ui='pixel'] .act-card:active {
   box-shadow: var(--px-bevel-light);
 }
 
-html[data-ui='pixel'] .act-body {
-  padding-top: 16px;
-}
-
-/* OVERWORLD 微微倾斜的悬赏等级贴纸 */
 html[data-ui='pixel'] .quest-rank-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
+  padding: 1.5px 6px;
   border: 2px solid var(--px-ink);
   box-shadow: 2px 2px 0 0 var(--px-ink);
   font-family: 'Silkscreen', 'PingFang SC', monospace;
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 800;
-  line-height: 1.25;
   white-space: nowrap;
 }
 
-html[data-ui='pixel'] .quest-rank-tag.rank-s {
-  background: #e2522e;
-  color: #ffffff;
-  transform: rotate(-1.5deg);
-}
-
-html[data-ui='pixel'] .quest-rank-tag.rank-a {
-  background: #f0a232;
-  color: #1c1c1c;
-  transform: rotate(1deg);
-}
-
-html[data-ui='pixel'] .quest-rank-tag.rank-b {
-  background: #2e5dd6;
-  color: #ffffff;
-  transform: rotate(-1deg);
-}
-
-html[data-ui='pixel'] .quest-rank-tag.rank-end {
-  background: var(--surface-2);
-  color: var(--text-3);
-}
-
-html[data-ui='pixel'] .quest-cleared-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 6px;
-  background: #2fa84f;
-  color: #ffffff;
-  border: 2px solid var(--px-ink);
-  font-size: 10px;
-  font-weight: 800;
-}
-
-html[data-ui='pixel'] .act-tag {
-  border: 2px solid var(--px-ink);
-  background: var(--surface-2);
-  color: var(--text);
-  box-shadow: 2px 2px 0 0 rgba(28, 28, 28, 0.22);
-}
+html[data-ui='pixel'] .quest-rank-tag.rank-s { background: #e2522e; color: #fff; transform: rotate(-1.5deg); }
+html[data-ui='pixel'] .quest-rank-tag.rank-a { background: #f0a232; color: #1c1c1c; transform: rotate(1deg); }
+html[data-ui='pixel'] .quest-rank-tag.rank-b { background: #2e5dd6; color: #fff; transform: rotate(-1deg); }
+html[data-ui='pixel'] .quest-rank-tag.rank-end { background: var(--surface-2); color: var(--text-3); }
 
 html[data-ui='pixel'] .reg-pill {
   border: 2px solid var(--px-ink);
   font-family: 'VT323', 'PingFang SC', monospace;
-  font-size: 13.5px;
-  letter-spacing: 0.02em;
-  padding: 2px 7px;
+  font-size: 13px;
 }
+html[data-ui='pixel'] .reg-pill.golden,
+html[data-ui='pixel'] .reg-pill.urgent { background: #e2522e; color: #fff; }
+html[data-ui='pixel'] .reg-pill.upcoming { background: #2e5dd6; color: #fff; }
+html[data-ui='pixel'] .reg-pill.open { background: #2fa84f; color: #fff; }
+html[data-ui='pixel'] .reg-pill.low_stock { background: #ead8a3; color: #6d5526; }
 
-html[data-ui='pixel'] .reg-pill.urgent {
-  background: #e2522e;
-  color: #ffffff;
-}
-
-html[data-ui='pixel'] .reg-pill.upcoming {
-  background: #2e5dd6;
-  color: #ffffff;
-}
-
-html[data-ui='pixel'] .reg-pill.open {
-  background: #2fa84f;
-  color: #ffffff;
-}
-
-html[data-ui='pixel'] .audience-badge {
-  border: 2px solid var(--px-ink);
+html[data-ui='pixel'] .meta-chip {
+  border: 1.5px solid var(--px-ink);
   background: var(--surface-2);
   color: var(--text);
 }
-
-html[data-ui='pixel'] .act-credit {
-  padding: 4px 7px;
-  background: rgba(240, 162, 50, 0.18);
-  border: 1.5px dashed #8a5510;
+html[data-ui='pixel'] .meta-chip.score {
+  background: rgba(240, 162, 50, 0.25);
   color: var(--text);
-  font-weight: 700;
 }
 
-html[data-ui='pixel'] .time-box {
-  background: var(--surface-2);
-  border: 2px solid var(--px-ink);
-  box-shadow: var(--px-bevel-sunken);
-}
-
-html[data-ui='pixel'] .time-val.reg-highlight {
-  color: var(--px-cobalt);
-}
-
-html[data-ui='pixel'][data-theme='dark'] .time-val.reg-highlight {
-  color: #ffd27a;
-}
-
-/* Spritecraft 虚线缝合卡片底栏 */
-html[data-ui='pixel'] .act-foot {
+html[data-ui='pixel'] .act-bottom {
   border-top: 2px dashed var(--text-3);
 }
 
-html[data-ui='pixel'] .avatar {
-  border: 2px solid var(--px-ink);
-}
+/* 像素风二课统计档案（五维分段像素血条！） */
+html[data-ui='pixel'] .mod-track { display: none; }
+html[data-ui='pixel'] .mod-px-cells { display: grid; }
 
-html[data-ui='pixel'] .star-btn,
-html[data-ui='pixel'] .remind-btn {
-  background: var(--surface);
-  border: 2px solid var(--px-ink);
-  box-shadow: 2px 2px 0 0 var(--px-ink);
-  color: var(--text);
-}
-
-html[data-ui='pixel'] .star-btn.saved {
-  background: var(--px-gold);
-  color: #1c1c1c;
-  box-shadow: var(--px-bevel-gold), 2px 2px 0 0 var(--px-ink);
-}
-
-html[data-ui='pixel'] .remind-btn.armed {
-  background: var(--primary);
-  color: #ffffff;
-  box-shadow: var(--px-bevel-primary), 2px 2px 0 0 var(--px-ink);
-}
-
-html[data-ui='pixel'] .act-link {
-  background: var(--primary);
-  color: #ffffff;
-  border: 2px solid var(--px-ink);
-  box-shadow: var(--px-bevel-primary), 2px 2px 0 0 var(--px-ink);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
-}
-
-html[data-ui='pixel'] .act-link:active,
-html[data-ui='pixel'] .star-btn:active,
-html[data-ui='pixel'] .remind-btn:active {
-  transform: translate(2px, 2px);
-  box-shadow: none;
-}
-
-/* 像素翻卡模式（RPG 悬赏卡带） */
-html[data-ui='pixel'] .deck-card {
-  border: 3px solid var(--px-ink);
-  box-shadow: var(--px-bevel-light), 7px 7px 0 0 var(--px-ink);
-}
-
-html[data-ui='pixel'] .deck-hero {
-  background: var(--surface-2);
-  border-bottom: 2px dashed var(--text-3);
-}
-
-html[data-ui='pixel'] .deck-act-btn {
-  border: 2px solid var(--px-ink);
-  box-shadow: 2px 2px 0 0 var(--px-ink);
-  color: var(--text);
-}
-
-html[data-ui='pixel'] .deck-act-btn.primary {
-  background: var(--primary);
-  color: #ffffff;
-  box-shadow: var(--px-bevel-primary), 2px 2px 0 0 var(--px-ink);
-}
-
-html[data-ui='pixel'] .deck-progress-bar {
-  height: 12px;
-  border: 2px solid var(--px-ink);
-  background: var(--surface-2);
-  padding: 2px;
-}
-
-html[data-ui='pixel'] .deck-progress-fill {
-  background: repeating-linear-gradient(90deg, #2fa84f 0 10px, #1f8a3d 10px 12px);
-}
-
-/* 像素抽屉 & 悬浮任务背包 */
 html[data-ui='pixel'] .sheet-panel,
 html[data-ui='pixel'] .rm-dialog {
   background: var(--surface);
@@ -1162,110 +637,72 @@ html[data-ui='pixel'] .rm-dialog {
   box-shadow: var(--px-bevel-light), 6px 6px 0 0 var(--px-ink);
 }
 
-html[data-ui='pixel'] .sheet-head {
-  border-bottom: 2px dashed var(--text-3);
+html[data-ui='pixel'] .sheet-head { border-bottom: 2px dashed var(--text-3); }
+html[data-ui='pixel'] .sheet-foot { border-top: 2px dashed var(--text-3); }
+
+html[data-ui='pixel'] .credit-hero-card,
+html[data-ui='pixel'] .ds-time-card,
+html[data-ui='pixel'] .ds-source-card,
+html[data-ui='pixel'] .ds-credit-card,
+html[data-ui='pixel'] .ds-progress-box,
+html[data-ui='pixel'] .manual-quick-box,
+html[data-ui='pixel'] .fs-switch-row {
+  background: var(--surface-2);
+  border: 2px solid var(--px-ink);
+  box-shadow: var(--px-bevel-sunken);
 }
 
-html[data-ui='pixel'] .sheet-foot {
-  border-top: 2px dashed var(--text-3);
+html[data-ui='pixel'] .mod-row,
+html[data-ui='pixel'] .rec-item {
   background: var(--surface);
-}
-
-html[data-ui='pixel'] .sheet-btn {
   border: 2px solid var(--px-ink);
   box-shadow: 3px 3px 0 0 var(--px-ink);
 }
 
-html[data-ui='pixel'] .sheet-btn:active {
-  transform: translate(3px, 3px);
-  box-shadow: none;
-}
-
-html[data-ui='pixel'] .sheet-btn-primary {
-  background: var(--primary) !important;
-  color: #ffffff;
-  box-shadow: var(--px-bevel-primary), 3px 3px 0 0 var(--px-ink);
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
-}
-
-html[data-ui='pixel'] .ds-tool-chip {
-  border: 2px solid var(--px-ink);
+html[data-ui='pixel'] .credit-tabs,
+html[data-ui='pixel'] .auth-mode-tabs {
   background: var(--surface-2);
-  color: var(--text);
-  box-shadow: 2px 2px 0 0 var(--px-ink);
-}
-
-html[data-ui='pixel'] .ds-tool-chip.saved {
-  background: var(--px-gold);
-  color: #1c1c1c;
-  box-shadow: var(--px-bevel-gold), 2px 2px 0 0 var(--px-ink);
-}
-
-html[data-ui='pixel'] .ds-tool-chip.cleared {
-  background: var(--primary);
-  color: #ffffff;
-  box-shadow: var(--px-bevel-primary), 2px 2px 0 0 var(--px-ink);
-}
-
-html[data-ui='pixel'] .fav-dock {
-  background: var(--surface);
-  border: 3px solid var(--px-ink);
-  box-shadow: var(--px-bevel-light), 4px 4px 0 0 var(--px-ink);
-}
-
-html[data-ui='pixel'] .fav-dock-btn.active {
-  background: var(--px-gold);
-  color: #1c1c1c;
-  box-shadow: var(--px-bevel-gold);
-}
-
-html[data-ui='pixel'] .fs-pill {
   border: 2px solid var(--px-ink);
-  background: var(--surface-2);
-  color: var(--text);
-}
-
-html[data-ui='pixel'] .fs-pill.active {
-  background: var(--primary);
-  color: #ffffff;
-  box-shadow: var(--px-bevel-primary);
-}
-
-html[data-ui='pixel'] .ds-time-card,
-html[data-ui='pixel'] .ds-source-card,
-html[data-ui='pixel'] .ds-credit-card,
-html[data-ui='pixel'] .fs-switch-row {
-  border: 2px solid var(--px-ink);
-  background: var(--surface-2);
   box-shadow: var(--px-bevel-sunken);
 }
 
-/* 像素版移动端微调（保持 2 列紧凑与 60fps 顺滑） */
+html[data-ui='pixel'] .credit-tab.active,
+html[data-ui='pixel'] .auth-tab.active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: var(--px-bevel-primary);
+}
+
+html[data-ui='pixel'] .sheet-btn,
+html[data-ui='pixel'] .ds-step-btn,
+html[data-ui='pixel'] .mini-pill-btn,
+html[data-ui='pixel'] .mq-chip,
+html[data-ui='pixel'] .ds-tool-chip {
+  border: 2px solid var(--px-ink);
+  box-shadow: 2px 2px 0 0 var(--px-ink);
+}
+
+html[data-ui='pixel'] .sheet-btn-primary,
+html[data-ui='pixel'] .ds-step-btn.primary,
+html[data-ui='pixel'] .ds-step-btn.success,
+html[data-ui='pixel'] .mini-pill-btn.primary,
+html[data-ui='pixel'] .fs-pill.active,
+html[data-ui='pixel'] .rm-quick-btn.active {
+  background: var(--primary) !important;
+  color: #fff !important;
+  box-shadow: var(--px-bevel-primary), 2px 2px 0 0 var(--px-ink);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+html[data-ui='pixel'] .credit-rank-pill {
+  background: var(--px-gold);
+  color: #1c1c1c;
+  border: 2px solid var(--px-ink);
+  box-shadow: var(--px-bevel-gold);
+}
+
 @media (max-width: 720px) {
-  html[data-ui='pixel'] .quest-hud {
-    padding: 11px 11px;
-    box-shadow: var(--px-bevel-light), 3px 3px 0 0 var(--px-ink);
-  }
-  html[data-ui='pixel'] .quest-hud-title {
-    font-size: 13px;
-  }
-  html[data-ui='pixel'] .quest-hud-sub {
-    font-size: 11px;
-  }
-  html[data-ui='pixel'] .quest-rank-sticker {
-    font-size: 10.5px;
-    padding: 3px 7px;
-  }
-  html[data-ui='pixel'] .quest-hud-stats {
-    gap: 6px;
-  }
-  html[data-ui='pixel'] .qs-val {
-    font-size: 17px;
-  }
-  html[data-ui='pixel'] .quest-bars-grid {
-    grid-template-columns: 1fr;
-    gap: 7px;
-  }
+  html[data-ui='pixel'] .qsb-cells { display: none; }
   html[data-ui='pixel'] .act-card {
     border-width: 2.5px;
     box-shadow: 3px 3px 0 0 var(--px-ink);
@@ -1277,19 +714,6 @@ html[data-ui='pixel'] .fs-switch-row {
     transform: none;
     box-shadow: 3px 3px 0 0 var(--px-ink);
   }
-  html[data-ui='pixel'] .act-card:active {
-    transform: translate(2px, 2px);
-    box-shadow: 1px 1px 0 0 var(--px-ink);
-  }
-  html[data-ui='pixel'] .reg-pill {
-    font-size: 11.5px;
-    padding: 1px 5px;
-  }
-  html[data-ui='pixel'] .quest-rank-tag {
-    font-size: 9.5px;
-    padding: 1.5px 5px;
-  }
-  html[data-ui='pixel'] .act-credit {
-    padding: 3px 5px;
-  }
+  html[data-ui='pixel'] .quest-rank-tag { font-size: 9px; padding: 1px 4px; }
+  html[data-ui='pixel'] .reg-pill { font-size: 11px; padding: 1px 5px; }
 }
