@@ -1,11 +1,12 @@
-const SHELL_CACHE = 'buct-hub-shell-v16';
+const SHELL_CACHE = 'buct-hub-shell-v17';
 const SHELL_ASSETS = [
   './',
   './index.html',
-  './styles.css?v=16',
-  './home.css?v=16',
-  './themes.css?v=16',
-  './app.js?v=16',
+  './styles.css?v=17',
+  './home.css?v=17',
+  './themes.css?v=17',
+  './buct-rubric.js?v=17',
+  './app.js?v=17',
   './manifest.json',
 ];
 
