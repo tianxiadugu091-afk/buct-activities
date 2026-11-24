@@ -167,6 +167,15 @@ function formatMdHm(iso) {
   return `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
+function formatEventTimeDisplay(raw) {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) {
+    return formatMdHm(s) || s;
+  }
+  return s;
+}
+
 function formatFullTime(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -776,7 +785,7 @@ function renderCard(item, idx = 0, animate = false) {
           ${
             item.event_time
               ? `<div class="time-row time-row-secondary"><span class="time-key">${isPixel ? '行动时间' : '活动时间'}</span><span class="time-val muted">${escapeHtml(
-                  item.event_time
+                  formatEventTimeDisplay(item.event_time)
                 )}</span></div>`
               : ''
           }
@@ -852,7 +861,7 @@ function renderDeckCard(item, idx, activeIdx) {
           ${
             item.event_time
               ? `<div class="time-row"><span class="time-key">${isPixel ? '行动时间' : '活动时间'}</span><span class="time-val">${escapeHtml(
-                  item.event_time
+                  formatEventTimeDisplay(item.event_time)
                 )}</span></div>`
               : ''
           }
@@ -1431,7 +1440,7 @@ function renderDetailSheetContent(item) {
       ${
         item.event_time
           ? `<div class="time-row"><span class="time-key">${isPixel ? '行动时间' : '活动时间'}</span><span class="time-val">${escapeHtml(
-              item.event_time
+              formatEventTimeDisplay(item.event_time)
             )}</span></div>`
           : ''
       }
@@ -1922,7 +1931,7 @@ function generatePixelBountyPoster(item) {
   const rows = [
     { k: '🛡 招募条件', v: audText, hi: false },
     { k: '⏱ 委托期限', v: regDisplay, hi: true },
-    ...(item.event_time ? [{ k: '⚔ 行动时间', v: item.event_time, hi: false }] : []),
+    ...(item.event_time ? [{ k: '⚔ 行动时间', v: formatEventTimeDisplay(item.event_time), hi: false }] : []),
     { k: '🏰 发布公会', v: item.source_account_name || '校内公会', hi: false },
   ];
   const boxH = rows.length * 54 + 26;
@@ -2104,7 +2113,7 @@ function generatePosterDataUrl(item) {
   // Structured Time & Source info box
   const rows = [
     { k: '报名时间', v: regDisplay, hi: true },
-    ...(item.event_time ? [{ k: '活动时间', v: item.event_time, hi: false }] : []),
+    ...(item.event_time ? [{ k: '活动时间', v: formatEventTimeDisplay(item.event_time), hi: false }] : []),
     ...(item.location ? [{ k: '活动地点', v: item.location, hi: false }] : []),
     { k: '来源公众号', v: item.source_account_name || '校内公众号', hi: false },
   ];
