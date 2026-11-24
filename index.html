@@ -12,9 +12,9 @@
     rel="stylesheet"
     href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700&family=Inter:wght@400;500;600;700&family=Pixelify+Sans:wght@600;700&family=Silkscreen:wght@400;700&family=VT323&display=swap"
   />
-  <link rel="stylesheet" href="./styles.css?v=16" />
-  <link rel="stylesheet" href="./home.css?v=16" />
-  <link rel="stylesheet" href="./themes.css?v=16" />
+  <link rel="stylesheet" href="./styles.css?v=17" />
+  <link rel="stylesheet" href="./home.css?v=17" />
+  <link rel="stylesheet" href="./themes.css?v=17" />
   <script>
     (function () {
       try {
@@ -333,21 +333,16 @@
             <button type="button" class="credit-tab" data-ctab="history">成绩明细 (<span id="ctabHistCount">0</span>)</button>
           </div>
 
-          <!-- Tab 1: 五大模块进度 + 快捷/手动补录 -->
+          <!-- Tab 1: 五大模块进度 + 可展开细则点选清单（免打字） -->
           <div id="ctabOverview" class="ctab-pane">
-            <div class="module-bars-list" id="moduleBarsList"></div>
-            <div class="manual-quick-box">
-              <div class="mq-head">
-                <span class="mq-title">快捷补录北化高频二课</span>
-                <button type="button" class="mini-pill-btn primary" id="openManualAddBtn">＋ 手动增加成绩</button>
-              </div>
-              <div class="mq-presets" id="mqPresets">
-                <button type="button" class="mq-chip" data-preset-title="青年大学习" data-preset-mod="moral" data-preset-score="35">青年大学习 +35</button>
-                <button type="button" class="mq-chip" data-preset-title="“奔跑在北化”跑步打卡" data-preset-mod="sports" data-preset-score="30">奔跑在北化 +30</button>
-                <button type="button" class="mq-chip" data-preset-title="国家大学生体质测试" data-preset-mod="sports" data-preset-score="20">国家体测 +20</button>
-                <button type="button" class="mq-chip" data-preset-title="志愿服务/社会实践" data-preset-mod="labor" data-preset-score="10">志愿服务 +10</button>
+            <div class="rubric-overview-bar">
+              <span class="rob-hint">点击任意模块展开细则 · 全程点选免打字</span>
+              <div class="rob-btns">
+                <button type="button" class="mini-pill-btn" id="fillBaselineBtn" title="一键填入青年大学习/行为准则/刻苦学习/国家体测等常规基础分">⚡ 一键常规项</button>
+                <button type="button" class="mini-pill-btn primary" id="openManualAddBtn">＋ 点选补录</button>
               </div>
             </div>
+            <div class="module-bars-list" id="moduleBarsList"></div>
           </div>
 
           <!-- Tab 2: 已报名待参加清单 -->
@@ -360,15 +355,15 @@
             <div class="history-toolbar">
               <select id="historyModFilter" class="mini-select" aria-label="按二课模块筛选明细">
                 <option value="">全部五大模块</option>
-                <option value="moral">德育思想</option>
-                <option value="academic">学术科创</option>
-                <option value="sports">体育身心</option>
-                <option value="aesthetic">美育人文</option>
-                <option value="labor">劳育实践</option>
+                <option value="moral">道德与思想素质</option>
+                <option value="academic">学术与科技创新</option>
+                <option value="sports">体育与身心健康</option>
+                <option value="aesthetic">美学与人文素养</option>
+                <option value="labor">劳动与社会实践</option>
               </select>
               <div class="history-actions">
                 <button type="button" class="mini-pill-btn" id="exportCsvBtn">⬇ 导出 CSV</button>
-                <button type="button" class="mini-pill-btn primary" id="openManualAddBtn2">＋ 手动补录</button>
+                <button type="button" class="mini-pill-btn primary" id="openManualAddBtn2">＋ 点选补录</button>
               </div>
             </div>
             <div id="historyList" class="credit-record-list"></div>
@@ -378,7 +373,7 @@
     </div>
   </div>
 
-  <!-- 「我已参加活动」快捷记分确认弹窗 -->
+  <!-- 「我已参加活动」快捷记分确认弹窗（细则自动匹配 + 点选分值免打字） -->
   <div id="attendModal" class="rm-backdrop hidden">
     <div class="rm-dialog" role="dialog" aria-modal="true" aria-labelledby="amTitle">
       <div class="rm-head">
@@ -391,18 +386,23 @@
       <div class="rm-field">
         <label for="amModule">计入二课模块</label>
         <select id="amModule" class="input">
-          <option value="moral">德育思想（满分 180）</option>
-          <option value="academic">学术科创（满分 120）</option>
-          <option value="sports">体育身心（满分 100）</option>
-          <option value="aesthetic">美育人文（满分 100）</option>
-          <option value="labor">劳育实践（满分 100）</option>
+          <option value="moral">道德与思想素质（满分 180 = 基础144 + 拓展36）</option>
+          <option value="academic">学术与科技创新（满分 120 = 基础96 + 拓展24）</option>
+          <option value="sports">体育与身心健康（满分 100 = 基础80 + 拓展20）</option>
+          <option value="aesthetic">美学与人文素养（满分 100 = 基础80 + 拓展20）</option>
+          <option value="labor">劳动与社会实践（满分 100 = 基础80 + 拓展20）</option>
         </select>
       </div>
 
       <div class="rm-field">
-        <label for="amScore">获得分值（点击快捷分值或手动输入）</label>
+        <label for="amRubric">对应评分细则（已自动匹配，可直接点选切换）</label>
+        <select id="amRubric" class="input"></select>
+      </div>
+
+      <div class="rm-field">
+        <label for="amScore">获得分值（直接点选，无需打字）</label>
         <div id="amQuickScores" class="rm-quick-group"></div>
-        <input type="number" id="amScore" class="input" min="0" max="200" step="0.5" placeholder="例如：10" />
+        <input type="number" id="amScore" class="input" min="-180" max="200" step="0.5" placeholder="例如：10" />
       </div>
 
       <div class="rm-actions">
@@ -412,45 +412,70 @@
     </div>
   </div>
 
-  <!-- 手动增加 / 编辑二课成绩弹窗 -->
+  <!-- 零打字点选补录 / 编辑二课成绩弹窗 -->
   <div id="manualCreditModal" class="rm-backdrop hidden">
-    <div class="rm-dialog" role="dialog" aria-modal="true" aria-labelledby="mcTitle">
+    <div class="rm-dialog mc-dialog" role="dialog" aria-modal="true" aria-labelledby="mcTitle">
       <div class="rm-head">
-        <h3 id="mcTitle">手动增加二课成绩</h3>
+        <h3 id="mcTitle">点选增加二课成绩</h3>
         <button type="button" id="mcClose" class="icon-btn" style="width:30px;height:30px;">✕</button>
       </div>
       <form id="manualCreditForm">
         <div class="rm-field">
-          <label for="mcName">活动 / 项目名称</label>
-          <input type="text" id="mcName" class="input" placeholder="如：宏德讲坛第 12 期 / 志愿服务" required maxlength="120" />
-        </div>
-        <div class="rm-field">
-          <label for="mcModule">所属二课模块</label>
-          <select id="mcModule" class="input">
-            <option value="moral">德育思想（满分 180）</option>
-            <option value="academic">学术科创（满分 120）</option>
-            <option value="sports">体育身心（满分 100）</option>
-            <option value="aesthetic">美育人文（满分 100）</option>
-            <option value="labor">劳育实践（满分 100）</option>
+          <label>① 选择二课模块</label>
+          <div id="mcModPills" class="mc-mod-pills"></div>
+          <select id="mcModule" class="hidden" aria-hidden="true">
+            <option value="moral">道德与思想素质</option>
+            <option value="academic">学术与科技创新</option>
+            <option value="sports">体育与身心健康</option>
+            <option value="aesthetic">美学与人文素养</option>
+            <option value="labor">劳动与社会实践</option>
           </select>
         </div>
-        <div class="mc-row-2">
-          <div class="rm-field">
-            <label for="mcScore">分值</label>
-            <input type="number" id="mcScore" class="input" min="0" max="200" step="0.5" value="10" required />
-          </div>
-          <div class="rm-field">
-            <label for="mcDate">日期</label>
-            <input type="date" id="mcDate" class="input" />
-          </div>
-        </div>
+
         <div class="rm-field">
-          <label for="mcNote">备注（可选）</label>
-          <input type="text" id="mcNote" class="input" placeholder="如：观众 / 志愿者 / 获奖等级" maxlength="160" />
+          <label for="mcRubricSelect">② 选择具体细则（基础评定 / 拓展评定）</label>
+          <select id="mcRubricSelect" class="input"></select>
         </div>
+
+        <div id="mcRuleHint" class="rm-note" style="margin-bottom:10px"></div>
+
+        <div class="rm-field">
+          <label>③ 点选档位 / 次数（免打字）</label>
+          <div id="mcOptionPills" class="rm-quick-group"></div>
+          <div id="mcCollectiveWrap" class="mc-collective-wrap hidden">
+            <button type="button" id="mcCollectiveBtn" class="rb-half-btn">👥 集体获奖（按半数计分 ×0.5）</button>
+          </div>
+        </div>
+
+        <div id="mcAutoPreview" class="mc-auto-preview"></div>
+
+        <details id="mcCustomDetails" class="mc-custom-details">
+          <summary>✎ 自定义名称 / 分值 / 日期（可选，一般无需打字）</summary>
+          <div class="mc-custom-body">
+            <div class="rm-field">
+              <label for="mcName">记录名称</label>
+              <input type="text" id="mcName" class="input" placeholder="已按所选细则自动生成" maxlength="120" />
+            </div>
+            <div class="mc-row-2">
+              <div class="rm-field">
+                <label for="mcScore">分值</label>
+                <input type="number" id="mcScore" class="input" min="-180" max="200" step="0.5" value="10" />
+              </div>
+              <div class="rm-field">
+                <label for="mcDate">日期</label>
+                <input type="date" id="mcDate" class="input" />
+              </div>
+            </div>
+            <div class="rm-field" style="margin-bottom:0">
+              <label for="mcNote">备注（可选）</label>
+              <input type="text" id="mcNote" class="input" placeholder="自动记录细则类别与档位" maxlength="160" />
+            </div>
+          </div>
+        </details>
+
         <div class="rm-actions">
           <button type="button" id="mcCancelBtn" class="btn btn-sm">取消</button>
-          <button type="submit" id="mcSaveBtn" class="btn btn-sm btn-primary">保存成绩</button>
+          <button type="submit" id="mcSaveBtn" class="btn btn-sm btn-primary">确认记入二课</button>
         </div>
       </form>
     </div>
@@ -527,6 +552,7 @@
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
   </button>
 
-  <script src="./app.js?v=16"></script>
+  <script src="./buct-rubric.js?v=17"></script>
+  <script src="./app.js?v=17"></script>
 </body>
 </html>
