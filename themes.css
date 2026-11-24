@@ -326,9 +326,23 @@ html[data-ui='minimal'][data-theme='dark'] .time-val.reg-highlight {
 html[data-ui='minimal'][data-theme='dark'] .reg-pill.open,
 html[data-ui='minimal'][data-theme='dark'] .meta-chip.aud-all,
 html[data-ui='minimal'][data-theme='dark'] .my-state-tag.done,
-html[data-ui='minimal'][data-theme='dark'] .rec-score-pill {
+html[data-ui='minimal'][data-theme='dark'] .rec-score-pill,
+html[data-ui='minimal'][data-theme='dark'] .rb-score-badge.pos {
   background: rgba(29, 185, 84, 0.15);
   color: #4ade80;
+}
+
+html[data-ui='minimal'][data-theme='dark'] .rb-chip.active {
+  background: #c9f30c;
+  color: #0a0a0b;
+}
+
+html[data-ui='minimal'][data-theme='dark'] .rb-chip,
+html[data-ui='minimal'][data-theme='dark'] .rb-stepper,
+html[data-ui='minimal'][data-theme='dark'] .rb-step-btn,
+html[data-ui='minimal'][data-theme='dark'] .rubric-item,
+html[data-ui='minimal'][data-theme='dark'] .mc-auto-preview {
+  border-radius: 5px;
 }
 
 html[data-ui='minimal'][data-theme='dark'] .reg-pill.low_stock {
@@ -826,6 +840,43 @@ html[data-ui='pixel'] .auth-tab.active,
 html[data-ui='pixel'] .ui-sw-btn.active {
   color: #ffffff;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* 像素风细则点选清单适配（0px 锐角 + 立体高光） */
+html[data-ui='pixel'] .rubric-drawer {
+  background: var(--surface-2);
+  border-top: 2px dashed var(--text-3);
+}
+html[data-ui='pixel'] .rubric-item {
+  background: var(--surface);
+  border: 2px solid var(--px-ink);
+  box-shadow: 2px 2px 0 0 var(--px-ink);
+}
+html[data-ui='pixel'] .rb-chip,
+html[data-ui='pixel'] .rb-stepper,
+html[data-ui='pixel'] .rb-half-btn,
+html[data-ui='pixel'] .mod-expand-pill {
+  border: 2px solid var(--px-ink);
+  box-shadow: 1.5px 1.5px 0 0 var(--px-ink);
+}
+html[data-ui='pixel'] .rb-chip.active {
+  background: var(--primary);
+  color: #ffffff;
+  box-shadow: var(--px-bevel-primary), 1.5px 1.5px 0 0 var(--px-ink);
+}
+html[data-ui='pixel'] .rb-chip.danger.active {
+  background: #e2522e;
+  color: #ffffff;
+}
+html[data-ui='pixel'] .rb-half-btn.active {
+  background: var(--px-gold);
+  color: #1c1c1c;
+  box-shadow: var(--px-bevel-gold);
+}
+html[data-ui='pixel'] .mc-auto-preview {
+  background: var(--surface-2);
+  border: 2px solid var(--px-ink);
+  box-shadow: var(--px-bevel-sunken);
 }
 
 @media (max-width: 720px) {
