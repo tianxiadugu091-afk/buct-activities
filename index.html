@@ -6,15 +6,35 @@
   <meta name="theme-color" content="#4f46e5" />
   <title>北化二课活动</title>
   <link rel="manifest" href="./manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700&family=Inter:wght@400;500;600;700&family=Pixelify+Sans:wght@600;700&family=Silkscreen:wght@400;700&family=VT323&display=swap"
+  />
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./home.css" />
+  <link rel="stylesheet" href="./themes.css" />
   <script>
     (function () {
       try {
-        var saved = localStorage.getItem('wah_theme');
-        var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var savedTheme = localStorage.getItem('wah_theme');
+        var dark = savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
         document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-      } catch (e) {}
+
+        var params = new URLSearchParams(window.location.search);
+        var urlStyle = params.get('style') || params.get('ui');
+        var uiStyle =
+          urlStyle === 'pixel' || urlStyle === 'minimal'
+            ? urlStyle
+            : localStorage.getItem('wah_ui_style_v1') || 'minimal';
+        if (urlStyle === 'pixel' || urlStyle === 'minimal') {
+          localStorage.setItem('wah_ui_style_v1', uiStyle);
+        }
+        document.documentElement.setAttribute('data-ui', uiStyle === 'pixel' ? 'pixel' : 'minimal');
+      } catch (e) {
+        document.documentElement.setAttribute('data-ui', 'minimal');
+      }
     })();
   </script>
 </head>
@@ -32,6 +52,11 @@
       </label>
 
       <div class="topbar-actions">
+        <div class="ui-style-switch" id="uiStyleSwitch" role="group" aria-label="切换界面风格">
+          <button type="button" class="ui-sw-btn" data-ui-choice="minimal" title="简约云端版（Cirrus / Fairweather / Halcyon）">☁ 简约</button>
+          <button type="button" class="ui-sw-btn" data-ui-choice="pixel" title="像素悬赏任务板（Spritecraft / OVERWORLD）">⚔ 悬赏</button>
+        </div>
+        <button type="button" class="ui-style-mobile-btn" id="uiStyleMobileBtn" title="切换简约版 / 像素悬赏版">⚔ 悬赏</button>
         <span class="fresh-dot-pill" id="livePill" title="数据更新状态">
           <span class="live-dot"></span>
           <span id="liveStatusText">同步中</span>
@@ -93,11 +118,68 @@
 
     <div id="reminderToast" class="reminder-toast hidden" role="alert"></div>
 
+    <!-- 像素悬赏任务板 HUD（仅像素悬赏版显示 · Spritecraft + OVERWORLD） -->
+    <section id="questHud" class="quest-hud" aria-label="二课悬赏公会告示板">
+      <div class="quest-hud-top">
+        <div class="quest-hud-brand">
+          <span class="quest-star-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M11 1h2v6h-2zM11 17h2v6h-2zM1 11h6v2H1zM17 11h6v2h-6zM4 4h3v3H4zM17 4h3v3h-3zM4 17h3v3H4zM17 17h3v3h-3zM9 9h6v6H9z"/></svg>
+          </span>
+          <div>
+            <div class="quest-hud-title">BUCT QUEST BOARD · 北化二课悬赏板</div>
+            <div class="quest-hud-sub" id="questHudSub">接取心仪悬赏任务，完成即可累积冒险经验</div>
+          </div>
+        </div>
+        <div class="quest-rank-sticker" id="questRankBadge">LV.1 见习新生</div>
+      </div>
+
+      <div class="quest-hud-stats">
+        <div class="quest-stat-tile">
+          <span class="qs-val" id="qsOpenCount">0</span>
+          <span class="qs-key">可接悬赏</span>
+        </div>
+        <div class="quest-stat-tile is-urgent">
+          <span class="qs-val" id="qsUrgentCount">0</span>
+          <span class="qs-key">S级急赏</span>
+        </div>
+        <button type="button" class="quest-stat-tile is-gold" id="qsAcceptedTile" title="点击筛选已接取的悬赏">
+          <span class="qs-val" id="qsAcceptedCount">0</span>
+          <span class="qs-key">已接悬赏</span>
+        </button>
+        <div class="quest-stat-tile is-green">
+          <span class="qs-val" id="qsClearedCount">0</span>
+          <span class="qs-key">已领赏</span>
+        </div>
+      </div>
+
+      <div class="quest-bars-grid">
+        <div class="sc-questbar">
+          <div class="sc-questbar__head">
+            <span>⚔ 任务栏 · ACCEPTED</span>
+            <span id="qbAcceptText">0 / 10</span>
+          </div>
+          <div class="sc-questbar__track">
+            <div class="sc-questbar__cells" id="qbAcceptCells"></div>
+          </div>
+        </div>
+        <div class="sc-questbar">
+          <div class="sc-questbar__head">
+            <span>★ 冒险经验 · XP</span>
+            <span id="qbXpText">0 / 100 XP</span>
+          </div>
+          <div class="sc-questbar__track">
+            <div class="sc-questbar__cells" id="qbXpCells"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <div class="ow-staircase" aria-hidden="true"></div>
+
     <!-- 急抢雷达横带（仅在有即将开抢/临近截止活动时自动显示） -->
     <div id="radarWrap" class="radar-wrap hidden" aria-label="急抢雷达">
       <div class="radar-badge">
         <span class="radar-pulse"></span>
-        <span>急抢雷达</span>
+        <span id="radarBadgeText">急抢雷达</span>
       </div>
       <div class="radar-track" id="radarTrack"></div>
     </div>
