@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#4f46e5" />
+  <meta name="theme-color" content="#0e1116" />
   <title>北化二课活动</title>
   <link rel="manifest" href="./manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -47,24 +47,25 @@
       </a>
 
       <label class="search-mini" for="searchInput">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <input id="searchInput" type="search" placeholder="搜活动 / 公众号…" autocomplete="off" />
       </label>
 
       <div class="topbar-actions">
         <div class="ui-style-switch" id="uiStyleSwitch" role="group" aria-label="切换界面风格">
-          <button type="button" class="ui-sw-btn" data-ui-choice="minimal" title="简约云端版（Cirrus / Fairweather / Halcyon）">☁ 简约</button>
-          <button type="button" class="ui-sw-btn" data-ui-choice="pixel" title="像素悬赏任务板（Spritecraft / OVERWORLD）">⚔ 悬赏</button>
+          <button type="button" class="ui-sw-btn" data-ui-choice="minimal" title="简约云端版">☁ 简约</button>
+          <button type="button" class="ui-sw-btn" data-ui-choice="pixel" title="像素悬赏版">⚔ 悬赏</button>
         </div>
         <button type="button" class="ui-style-mobile-btn" id="uiStyleMobileBtn" title="切换简约版 / 像素悬赏版">⚔ 悬赏</button>
-        <span class="fresh-dot-pill" id="livePill" title="数据更新状态">
-          <span class="live-dot"></span>
-          <span id="liveStatusText">同步中</span>
-        </span>
-        <button class="icon-btn" id="viewModeBtn" type="button" title="切换双列卡片 / 沉浸翻卡" aria-label="切换视图模式"></button>
-        <button class="icon-btn" id="themeToggle" type="button" title="深浅主题" aria-label="切换主题"></button>
-        <button class="icon-btn" id="refreshBtn" type="button" title="刷新" aria-label="刷新">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+
+        <button type="button" class="account-pill-btn" id="accountBtn" title="打开个人二课成绩统计与账号">
+          <span class="acc-dot hidden" id="accountPendingDot"></span>
+          <span id="accountBtnText">我的二课</span>
+        </button>
+
+        <button class="icon-btn desktop-only-btn" id="themeToggle" type="button" title="深浅主题" aria-label="切换主题"></button>
+        <button class="icon-btn desktop-only-btn" id="refreshBtn" type="button" title="刷新数据" aria-label="刷新">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
         </button>
       </div>
     </div>
@@ -73,13 +74,13 @@
   <div class="filter-bar">
     <div class="container filter-inner">
       <div class="chip-row" id="tagBar"></div>
-      <button type="button" class="mobile-filter-btn" id="mobileFilterBtn" aria-label="展开筛选与排序" aria-haspopup="dialog">
+      <button type="button" class="mobile-filter-btn" id="mobileFilterBtn" aria-label="筛选与设置" aria-haspopup="dialog">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v5l-4 2v-7L3 5z"/></svg>
         <span>筛选</span>
         <span class="mf-badge hidden" id="mobileFilterBadge">0</span>
       </button>
       <div class="filter-right">
-        <label class="toggle-ended" title="隐藏报名已截止或活动已结束的条目">
+        <label class="toggle-ended" title="隐藏已截止或已结束的活动">
           <input type="checkbox" id="hideEndedCheck" />
           <span>隐藏已结束</span>
         </label>
@@ -118,117 +119,62 @@
 
     <div id="reminderToast" class="reminder-toast hidden" role="alert"></div>
 
-    <!-- 像素悬赏任务板 HUD（仅像素悬赏版显示 · Spritecraft + OVERWORLD） -->
-    <section id="questHud" class="quest-hud" aria-label="二课悬赏公会告示板">
-      <div class="quest-hud-top">
-        <div class="quest-hud-brand">
-          <span class="quest-star-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M11 1h2v6h-2zM11 17h2v6h-2zM1 11h6v2H1zM17 11h6v2h-6zM4 4h3v3H4zM17 4h3v3h-3zM4 17h3v3H4zM17 17h3v3h-3zM9 9h6v6H9z"/></svg>
-          </span>
-          <div>
-            <div class="quest-hud-title">BUCT QUEST BOARD · 北化二课悬赏板</div>
-            <div class="quest-hud-sub" id="questHudSub">接取心仪悬赏任务，完成即可累积冒险经验</div>
-          </div>
-        </div>
-        <div class="quest-rank-sticker" id="questRankBadge">LV.1 见习新生</div>
-      </div>
+    <!-- 像素版 44px 极简冒险者状态条（仅像素悬赏版显示，点开即进入完整五维二课成绩单） -->
+    <button type="button" id="questSlimBar" class="quest-slim-bar" aria-label="打开冒险者二课成绩档案">
+      <span class="qsb-left">
+        <span class="qsb-rank" id="qsbRank">LV.1 见习新生</span>
+        <span class="qsb-cells" id="qsbCells" aria-hidden="true"></span>
+      </span>
+      <span class="qsb-right">
+        <span class="qsb-score" id="qsbScore">二课 0 / 600</span>
+        <span class="qsb-arrow">档案 ›</span>
+      </span>
+    </button>
 
-      <div class="quest-hud-stats">
-        <div class="quest-stat-tile">
-          <span class="qs-val" id="qsOpenCount">0</span>
-          <span class="qs-key">可接悬赏</span>
+    <!-- 第一排：刚刚更新的活动 -->
+    <section id="freshSection" class="fresh-section hidden" aria-label="刚刚更新">
+      <div class="section-bar">
+        <div class="section-bar-title">
+          <span class="fresh-live-dot"></span>
+          <span id="freshSectionTitle">刚刚更新</span>
         </div>
-        <div class="quest-stat-tile is-urgent">
-          <span class="qs-val" id="qsUrgentCount">0</span>
-          <span class="qs-key">S级急赏</span>
-        </div>
-        <button type="button" class="quest-stat-tile is-gold" id="qsAcceptedTile" title="点击筛选已接取的悬赏">
-          <span class="qs-val" id="qsAcceptedCount">0</span>
-          <span class="qs-key">已接悬赏</span>
-        </button>
-        <div class="quest-stat-tile is-green">
-          <span class="qs-val" id="qsClearedCount">0</span>
-          <span class="qs-key">已领赏</span>
-        </div>
+        <span class="section-bar-meta" id="freshSectionMeta"></span>
       </div>
-
-      <div class="quest-bars-grid">
-        <div class="sc-questbar">
-          <div class="sc-questbar__head">
-            <span>⚔ 任务栏 · ACCEPTED</span>
-            <span id="qbAcceptText">0 / 10</span>
-          </div>
-          <div class="sc-questbar__track">
-            <div class="sc-questbar__cells" id="qbAcceptCells"></div>
-          </div>
-        </div>
-        <div class="sc-questbar">
-          <div class="sc-questbar__head">
-            <span>★ 冒险经验 · XP</span>
-            <span id="qbXpText">0 / 100 XP</span>
-          </div>
-          <div class="sc-questbar__track">
-            <div class="sc-questbar__cells" id="qbXpCells"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-    <div class="ow-staircase" aria-hidden="true"></div>
-
-    <!-- 急抢雷达横带（仅在有即将开抢/临近截止活动时自动显示） -->
-    <div id="radarWrap" class="radar-wrap hidden" aria-label="急抢雷达">
-      <div class="radar-badge">
-        <span class="radar-pulse"></span>
-        <span id="radarBadgeText">急抢雷达</span>
-      </div>
-      <div class="radar-track" id="radarTrack"></div>
-    </div>
-
-    <section id="activitiesGrid" class="cards-grid" aria-live="polite">
-      <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
-      <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
-      <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
-      <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
+      <div id="freshGrid" class="cards-grid cards-grid-fresh"></div>
     </section>
 
-    <!-- 沉浸横滑翻卡舞台（原生 scroll-snap 60fps） -->
-    <section id="deckStage" class="deck-stage hidden" aria-live="polite">
-      <div class="deck-track" id="deckTrack"></div>
-      <div class="deck-pager" id="deckPager">
-        <button type="button" class="deck-nav-btn" id="deckPrevBtn" aria-label="上一张">‹</button>
-        <div class="deck-progress-wrap">
-          <div class="deck-progress-bar"><div class="deck-progress-fill" id="deckProgressFill"></div></div>
-          <span class="deck-counter" id="deckCounter">01 / 01</span>
-        </div>
-        <button type="button" class="deck-nav-btn" id="deckNextBtn" aria-label="下一张">›</button>
+    <!-- 主活动区 -->
+    <section class="all-section" aria-live="polite">
+      <div class="section-bar hidden" id="allSectionBar">
+        <div class="section-bar-title" id="allSectionTitle">更多活动</div>
+        <span class="section-bar-meta" id="allSectionMeta"></span>
+      </div>
+      <div id="activitiesGrid" class="cards-grid">
+        <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
+        <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
+        <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
+        <div class="sk-card"><div class="sk sk-tag"></div><div class="sk sk-title"></div><div class="sk sk-box"></div></div>
       </div>
     </section>
   </main>
 
-  <!-- 悬浮待抢收藏夹胶囊 -->
-  <div id="favDock" class="fav-dock hidden" role="region" aria-label="待抢收藏夹">
-    <button type="button" class="fav-dock-btn" id="favDockToggle">
-      <span class="fav-dock-star">★</span>
-      <span id="favDockText">待抢清单</span>
-      <span class="fav-dock-count" id="favDockCount">0</span>
-    </button>
-    <button type="button" class="fav-dock-clear hidden" id="favDockAllBtn">看全部</button>
-  </div>
-
   <footer class="mini-footer">
     <div class="container mini-footer-inner">
-      <span id="lastUpdateText"></span>
+      <span class="footer-status">
+        <span class="fresh-dot-inline" id="livePill"><span class="live-dot"></span><span id="liveStatusText">同步中</span></span>
+        <span id="lastUpdateText"></span>
+      </span>
       <a href="/admin" class="admin-quiet-link">管理</a>
     </div>
   </footer>
 
-  <!-- 移动端底部筛选抽屉（方案 C） -->
+  <!-- 移动端底部筛选与偏好抽屉 -->
   <div id="filterSheet" class="sheet-backdrop" aria-hidden="true">
     <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="fsTitle">
       <div class="sheet-handle-area" data-sheet-close="filterSheet"><span class="sheet-handle"></span></div>
       <div class="sheet-head">
-        <h3 id="fsTitle">筛选与排序</h3>
-        <button type="button" class="icon-btn sheet-close-btn" data-sheet-close="filterSheet" aria-label="关闭筛选">✕</button>
+        <h3 id="fsTitle">筛选与偏好</h3>
+        <button type="button" class="icon-btn sheet-close-btn" data-sheet-close="filterSheet" aria-label="关闭">✕</button>
       </div>
       <div class="sheet-body">
         <div class="fs-section">
@@ -269,6 +215,11 @@
           </div>
           <input type="checkbox" id="fsHideEndedCheck" class="fs-checkbox" />
         </label>
+
+        <div class="fs-pref-row">
+          <button type="button" class="fs-pref-btn" id="fsThemeBtn">🌓 切换深浅色主题</button>
+          <button type="button" class="fs-pref-btn" id="fsRefreshBtn">↻ 立即刷新活动</button>
+        </div>
       </div>
       <div class="sheet-foot">
         <button type="button" class="sheet-btn sheet-btn-ghost" id="fsResetBtn">重置</button>
@@ -277,7 +228,7 @@
     </div>
   </div>
 
-  <!-- 活动详情半屏抽屉（方案 A） -->
+  <!-- 活动详情半屏抽屉（完整信息 + 报名成功/已参加记分闭环） -->
   <div id="detailSheet" class="sheet-backdrop" aria-hidden="true">
     <div class="sheet-panel detail-sheet-panel" id="detailSheetPanel" role="dialog" aria-modal="true" aria-labelledby="dsTitle">
       <div class="ds-accent-bar" id="dsAccentBar"></div>
@@ -288,6 +239,236 @@
       </div>
       <div class="sheet-body" id="dsBody"></div>
       <div class="sheet-foot" id="dsFoot"></div>
+    </div>
+  </div>
+
+  <!-- 我的二课成绩统计 & 个人账号面板（简约/像素双风完整适配） -->
+  <div id="creditSheet" class="sheet-backdrop" aria-hidden="true">
+    <div class="sheet-panel credit-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="csTitle">
+      <div class="sheet-handle-area" data-sheet-close="creditSheet"><span class="sheet-handle"></span></div>
+      <div class="sheet-head">
+        <h3 id="csTitle">我的二课成绩</h3>
+        <button type="button" class="icon-btn sheet-close-btn" data-sheet-close="creditSheet" aria-label="关闭">✕</button>
+      </div>
+      <div class="sheet-body" id="creditSheetBody">
+        <!-- 未登录：注册 / 登录视图 -->
+        <div id="creditAuthView" class="credit-auth-view">
+          <div class="auth-intro">
+            <div class="auth-intro-title" id="authIntroTitle">创建个人二课账号</div>
+            <div class="auth-intro-sub" id="authIntroSub">记录你报名和参加过的每一次二课，自动按北化五大模块汇总学分与缺口。</div>
+          </div>
+
+          <div class="auth-mode-tabs" id="authModeTabs">
+            <button type="button" class="auth-tab active" data-auth-mode="register">创建新账号</button>
+            <button type="button" class="auth-tab" data-auth-mode="login">已有账号登录</button>
+          </div>
+
+          <form id="studentAuthForm" class="auth-form">
+            <div class="rm-field">
+              <label for="saUsername">账号 / 学号</label>
+              <input id="saUsername" type="text" class="input" placeholder="如：2024010001 或英文昵称" required minlength="2" maxlength="32" autocomplete="username" />
+            </div>
+            <div class="rm-field" id="saDisplayWrap">
+              <label for="saDisplayName">显示昵称（可选）</label>
+              <input id="saDisplayName" type="text" class="input" placeholder="如：化大卷王 / 小明" maxlength="24" />
+            </div>
+            <div class="rm-field">
+              <label for="saPassword">密码（至少 4 位）</label>
+              <input id="saPassword" type="password" class="input" placeholder="用于保护本机账号" required minlength="4" maxlength="64" autocomplete="current-password" />
+            </div>
+            <div id="saError" class="auth-error hidden"></div>
+            <button type="submit" class="sheet-btn sheet-btn-primary" id="saSubmitBtn" style="width:100%">创建账号并开始记录</button>
+          </form>
+
+          <div class="auth-sync-hint">
+            <span>已有其他设备的备份口令？</span>
+            <button type="button" class="text-link-btn" id="openImportFromAuthBtn">直接通过同步口令恢复</button>
+          </div>
+        </div>
+
+        <!-- 已登录：二课成绩统计看板 -->
+        <div id="creditDashView" class="credit-dash-view hidden">
+          <div class="credit-hero-card">
+            <div class="credit-user-row">
+              <div class="credit-user-info">
+                <div class="credit-avatar" id="cdAvatar">学</div>
+                <div>
+                  <div class="credit-user-name">
+                    <span id="cdDisplayName">同学</span>
+                    <span class="credit-rank-pill" id="cdRankPill">LV.1 见习新生</span>
+                  </div>
+                  <div class="credit-user-sub" id="cdUsernameSub">@student</div>
+                </div>
+              </div>
+              <div class="credit-user-btns">
+                <button type="button" class="mini-pill-btn" id="openSyncCodeBtn" title="导出或导入跨设备同步口令">⇄ 同步口令</button>
+                <button type="button" class="mini-pill-btn" id="studentLogoutBtn">切换账号</button>
+              </div>
+            </div>
+
+            <div class="credit-total-strip">
+              <div class="ct-main">
+                <span class="ct-num" id="cdTotalValid">0</span>
+                <span class="ct-denom">/ 600 有效分</span>
+              </div>
+              <div class="ct-sub" id="cdTotalRawMeta">已参加 0 项 · 已报名待参加 0 项</div>
+            </div>
+          </div>
+
+          <!-- 待结算提醒条 -->
+          <div id="pendingSettleBox" class="pending-settle-box hidden"></div>
+
+          <!-- 三标签导航 -->
+          <div class="credit-tabs" id="creditTabs">
+            <button type="button" class="credit-tab active" data-ctab="overview">成绩总览</button>
+            <button type="button" class="credit-tab" data-ctab="registered">已报名 (<span id="ctabRegCount">0</span>)</button>
+            <button type="button" class="credit-tab" data-ctab="history">成绩明细 (<span id="ctabHistCount">0</span>)</button>
+          </div>
+
+          <!-- Tab 1: 五大模块进度 + 快捷/手动补录 -->
+          <div id="ctabOverview" class="ctab-pane">
+            <div class="module-bars-list" id="moduleBarsList"></div>
+            <div class="manual-quick-box">
+              <div class="mq-head">
+                <span class="mq-title">快捷补录北化高频二课</span>
+                <button type="button" class="mini-pill-btn primary" id="openManualAddBtn">＋ 手动增加成绩</button>
+              </div>
+              <div class="mq-presets" id="mqPresets">
+                <button type="button" class="mq-chip" data-preset-title="青年大学习" data-preset-mod="moral" data-preset-score="35">青年大学习 +35</button>
+                <button type="button" class="mq-chip" data-preset-title="“奔跑在北化”跑步打卡" data-preset-mod="sports" data-preset-score="30">奔跑在北化 +30</button>
+                <button type="button" class="mq-chip" data-preset-title="国家大学生体质测试" data-preset-mod="sports" data-preset-score="20">国家体测 +20</button>
+                <button type="button" class="mq-chip" data-preset-title="志愿服务/社会实践" data-preset-mod="labor" data-preset-score="10">志愿服务 +10</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 2: 已报名待参加清单 -->
+          <div id="ctabRegistered" class="ctab-pane hidden">
+            <div id="registeredList" class="credit-record-list"></div>
+          </div>
+
+          <!-- Tab 3: 成绩明细流水 -->
+          <div id="ctabHistory" class="ctab-pane hidden">
+            <div class="history-toolbar">
+              <select id="historyModFilter" class="mini-select" aria-label="按二课模块筛选明细">
+                <option value="">全部五大模块</option>
+                <option value="moral">德育思想</option>
+                <option value="academic">学术科创</option>
+                <option value="sports">体育身心</option>
+                <option value="aesthetic">美育人文</option>
+                <option value="labor">劳育实践</option>
+              </select>
+              <div class="history-actions">
+                <button type="button" class="mini-pill-btn" id="exportCsvBtn">⬇ 导出 CSV</button>
+                <button type="button" class="mini-pill-btn primary" id="openManualAddBtn2">＋ 手动补录</button>
+              </div>
+            </div>
+            <div id="historyList" class="credit-record-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 「我已参加活动」快捷记分确认弹窗 -->
+  <div id="attendModal" class="rm-backdrop hidden">
+    <div class="rm-dialog" role="dialog" aria-modal="true" aria-labelledby="amTitle">
+      <div class="rm-head">
+        <h3 id="amTitle">确认参加并记录二课成绩</h3>
+        <button type="button" id="amClose" class="icon-btn" style="width:30px;height:30px;">✕</button>
+      </div>
+      <div id="amActName" class="rm-act-name"></div>
+      <div id="amHint" class="rm-note"></div>
+
+      <div class="rm-field">
+        <label for="amModule">计入二课模块</label>
+        <select id="amModule" class="input">
+          <option value="moral">德育思想（满分 180）</option>
+          <option value="academic">学术科创（满分 120）</option>
+          <option value="sports">体育身心（满分 100）</option>
+          <option value="aesthetic">美育人文（满分 100）</option>
+          <option value="labor">劳育实践（满分 100）</option>
+        </select>
+      </div>
+
+      <div class="rm-field">
+        <label for="amScore">获得分值（点击快捷分值或手动输入）</label>
+        <div id="amQuickScores" class="rm-quick-group"></div>
+        <input type="number" id="amScore" class="input" min="0" max="200" step="0.5" placeholder="例如：10" />
+      </div>
+
+      <div class="rm-actions">
+        <button type="button" id="amCancelBtn" class="btn btn-sm">取消</button>
+        <button type="button" id="amSaveBtn" class="btn btn-sm btn-primary">确认记入二课成绩</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 手动增加 / 编辑二课成绩弹窗 -->
+  <div id="manualCreditModal" class="rm-backdrop hidden">
+    <div class="rm-dialog" role="dialog" aria-modal="true" aria-labelledby="mcTitle">
+      <div class="rm-head">
+        <h3 id="mcTitle">手动增加二课成绩</h3>
+        <button type="button" id="mcClose" class="icon-btn" style="width:30px;height:30px;">✕</button>
+      </div>
+      <form id="manualCreditForm">
+        <div class="rm-field">
+          <label for="mcName">活动 / 项目名称</label>
+          <input type="text" id="mcName" class="input" placeholder="如：宏德讲坛第 12 期 / 志愿服务" required maxlength="120" />
+        </div>
+        <div class="rm-field">
+          <label for="mcModule">所属二课模块</label>
+          <select id="mcModule" class="input">
+            <option value="moral">德育思想（满分 180）</option>
+            <option value="academic">学术科创（满分 120）</option>
+            <option value="sports">体育身心（满分 100）</option>
+            <option value="aesthetic">美育人文（满分 100）</option>
+            <option value="labor">劳育实践（满分 100）</option>
+          </select>
+        </div>
+        <div class="mc-row-2">
+          <div class="rm-field">
+            <label for="mcScore">分值</label>
+            <input type="number" id="mcScore" class="input" min="0" max="200" step="0.5" value="10" required />
+          </div>
+          <div class="rm-field">
+            <label for="mcDate">日期</label>
+            <input type="date" id="mcDate" class="input" />
+          </div>
+        </div>
+        <div class="rm-field">
+          <label for="mcNote">备注（可选）</label>
+          <input type="text" id="mcNote" class="input" placeholder="如：观众 / 志愿者 / 获奖等级" maxlength="160" />
+        </div>
+        <div class="rm-actions">
+          <button type="button" id="mcCancelBtn" class="btn btn-sm">取消</button>
+          <button type="submit" id="mcSaveBtn" class="btn btn-sm btn-primary">保存成绩</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 跨设备同步口令弹窗 -->
+  <div id="syncCodeModal" class="rm-backdrop hidden">
+    <div class="rm-dialog" role="dialog" aria-modal="true" aria-labelledby="scTitle">
+      <div class="rm-head">
+        <h3 id="scTitle">跨设备备份 / 同步口令</h3>
+        <button type="button" id="scClose" class="icon-btn" style="width:30px;height:30px;">✕</button>
+      </div>
+      <div class="rm-note">复制下方口令发给自己，在另一台手机或电脑粘贴即可 1 秒恢复全部二课成绩记录。</div>
+      <div class="rm-field">
+        <label for="scExportBox">当前账号备份口令</label>
+        <textarea id="scExportBox" class="input" rows="3" readonly style="font-size:12px;word-break:break-all"></textarea>
+        <button type="button" id="scCopyBtn" class="btn btn-sm" style="align-self:flex-start">📋 复制我的备份口令</button>
+      </div>
+      <div class="rm-field">
+        <label for="scImportBox">粘贴口令以导入 / 恢复</label>
+        <textarea id="scImportBox" class="input" rows="3" placeholder="粘贴 BUCT2K:... 备份口令"></textarea>
+      </div>
+      <div class="rm-actions">
+        <button type="button" id="scCancelBtn" class="btn btn-sm">关闭</button>
+        <button type="button" id="scImportBtn" class="btn btn-sm btn-primary">立即导入恢复</button>
+      </div>
     </div>
   </div>
 
@@ -309,9 +490,9 @@
       </div>
 
       <div class="rm-actions">
-        <button type="button" id="rmIcsBtn" class="btn btn-sm" title="写入手机系统日历（无声弹窗，关网页/锁屏也准时生效）">📅 导入手机日历(关网页也生效)</button>
+        <button type="button" id="rmIcsBtn" class="btn btn-sm" title="写入手机系统日历（无声弹窗，关网页/锁屏也准时生效）">📅 导入手机日历</button>
         <button type="button" id="rmCancelExisting" class="btn btn-sm btn-danger hidden">取消提醒</button>
-        <button type="button" id="rmSaveBtn" class="btn btn-sm btn-primary">开启静音振动提醒</button>
+        <button type="button" id="rmSaveBtn" class="btn btn-sm btn-primary">开启静音提醒</button>
       </div>
     </div>
   </div>
