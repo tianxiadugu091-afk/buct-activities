@@ -12,9 +12,9 @@
     rel="stylesheet"
     href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700&family=Inter:wght@400;500;600;700&family=Pixelify+Sans:wght@600;700&family=Silkscreen:wght@400;700&family=VT323&display=swap"
   />
-  <link rel="stylesheet" href="./styles.css" />
-  <link rel="stylesheet" href="./home.css" />
-  <link rel="stylesheet" href="./themes.css" />
+  <link rel="stylesheet" href="./styles.css?v=16" />
+  <link rel="stylesheet" href="./home.css?v=16" />
+  <link rel="stylesheet" href="./themes.css?v=16" />
   <script>
     (function () {
       try {
@@ -39,6 +39,10 @@
   </script>
 </head>
 <body class="home">
+  <!-- 顶部浮空通知胶囊（简约版：Liquid GlassToast / 像素版：RPG 气泡横幅） -->
+  <div id="glassToast" class="glass-toast" role="status" aria-live="polite"></div>
+
+  <div id="appShell" class="app-shell">
   <header class="topbar">
     <div class="container topbar-inner">
       <a class="brand-link" href="./" title="北化二课活动">
@@ -52,7 +56,8 @@
       </label>
 
       <div class="topbar-actions">
-        <div class="ui-style-switch" id="uiStyleSwitch" role="group" aria-label="切换界面风格">
+        <div class="ui-style-switch liquid-track" id="uiStyleSwitch" role="group" aria-label="切换界面风格">
+          <span class="liquid-pill-bg" aria-hidden="true"></span>
           <button type="button" class="ui-sw-btn" data-ui-choice="minimal" title="简约云端版">☁ 简约</button>
           <button type="button" class="ui-sw-btn" data-ui-choice="pixel" title="像素悬赏版">⚔ 悬赏</button>
         </div>
@@ -167,6 +172,7 @@
       <a href="/admin" class="admin-quiet-link">管理</a>
     </div>
   </footer>
+  </div><!-- /#appShell -->
 
   <!-- 移动端底部筛选与偏好抽屉 -->
   <div id="filterSheet" class="sheet-backdrop" aria-hidden="true">
@@ -258,7 +264,8 @@
             <div class="auth-intro-sub" id="authIntroSub">记录你报名和参加过的每一次二课，自动按北化五大模块汇总学分与缺口。</div>
           </div>
 
-          <div class="auth-mode-tabs" id="authModeTabs">
+          <div class="auth-mode-tabs liquid-track" id="authModeTabs">
+            <span class="liquid-pill-bg" aria-hidden="true"></span>
             <button type="button" class="auth-tab active" data-auth-mode="register">创建新账号</button>
             <button type="button" class="auth-tab" data-auth-mode="login">已有账号登录</button>
           </div>
@@ -319,7 +326,8 @@
           <div id="pendingSettleBox" class="pending-settle-box hidden"></div>
 
           <!-- 三标签导航 -->
-          <div class="credit-tabs" id="creditTabs">
+          <div class="credit-tabs liquid-track" id="creditTabs">
+            <span class="liquid-pill-bg" aria-hidden="true"></span>
             <button type="button" class="credit-tab active" data-ctab="overview">成绩总览</button>
             <button type="button" class="credit-tab" data-ctab="registered">已报名 (<span id="ctabRegCount">0</span>)</button>
             <button type="button" class="credit-tab" data-ctab="history">成绩明细 (<span id="ctabHistCount">0</span>)</button>
@@ -519,6 +527,6 @@
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
   </button>
 
-  <script src="./app.js"></script>
+  <script src="./app.js?v=16"></script>
 </body>
 </html>
