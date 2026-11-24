@@ -9,15 +9,20 @@ const IS_STATIC_HOST =
   window.location.protocol === 'file:' ||
   /\.(github\.io|pages\.dev|vercel\.app|netlify\.app|gitee\.io)$/i.test(window.location.hostname);
 
-const BUCT_MODULES = [
-  { key: 'moral', name: '德育思想', max: 180, color: '#ef4444', match: /德育|思想|党团|宏德/ },
-  { key: 'academic', name: '学术科创', max: 120, color: '#3b82f6', match: /学术|科创|创新|创业|讲座|大创|竞赛/ },
-  { key: 'sports', name: '体育身心', max: 100, color: '#f97316', match: /体育|身心|心理|体测|跑步|球/ },
-  { key: 'aesthetic', name: '美育人文', max: 100, color: '#ec4899', match: /美育|人文|艺术|音乐|文艺|书画|演出|展览/ },
-  { key: 'labor', name: '劳育实践', max: 100, color: '#10b981', match: /劳育|实践|志愿|公益|宿舍|劳动/ },
-];
-const BUCT_MODULE_MAP = Object.fromEntries(BUCT_MODULES.map((m) => [m.key, m]));
-const BUCT_TOTAL_CAP = BUCT_MODULES.reduce((s, m) => s + m.max, 0);
+const {
+  BUCT_MODULES,
+  BUCT_MODULE_MAP,
+  BUCT_TOTAL_CAP,
+  BUCT_RUBRIC_GROUPS,
+  BUCT_RUBRIC_ITEMS,
+  BUCT_RUBRIC_MAP,
+  BUCT_BASELINE_PRESETS,
+  getRubricItemsForModule,
+  inferModuleKeyFromItem,
+  inferRubricForActivity,
+  getRubricOptionPresets,
+  computeDetailedCreditSummary,
+} = window.BuctRubric;
 
 const state = {
   tagId: '',
@@ -44,8 +49,15 @@ const state = {
   authMode: 'register', // 'register' | 'login'
   creditTab: 'overview', // 'overview' | 'registered' | 'history'
   historyModuleFilter: '',
+  expandedRubricMod: 'moral', // 默认展开第一个模块方便直接点选
   pendingAttendActivity: null, // activity item or record being confirmed
   editingManualId: null,
+  mcSelectedMod: 'moral',
+  mcSelectedRubric: 'moral_base_demo',
+  mcSelectedScore: 35,
+  mcSelectedLabel: '优秀',
+  mcCollective: false,
+  mcCustomTouched: false,
   afterLoginAction: null, // callback executed seamlessly after user registers/logs in
   prevModScores: {},
 };
@@ -545,14 +557,6 @@ function compactTimeBrief(item, regSt) {
   return { text: '报名 详见推文', hi: false };
 }
 
-function inferModuleKeyFromItem(item) {
-  const combined = `${(item.tags || []).map((t) => t.name).join(' ')} ${item.credit_hint || ''} ${item.title || ''}`;
-  for (const mod of BUCT_MODULES) {
-    if (mod.match.test(combined)) return mod.key;
-  }
-  return 'moral';
-}
-
 function getQuestMeta(item, regSt, isUncertain) {
   if (regSt.ended) return { code: 'END', label: '已归档', cls: 'rank-end' };
   if (regSt.kind === 'golden' || regSt.kind === 'urgent') return { code: 'S', label: 'S 急赏', cls: 'rank-s' };
@@ -727,12 +731,28 @@ function persistLocalStudentRecords() {
   writeLocalAccountsDb(db);
 }
 
-async function saveActivityRecord({ activityId, title, moduleKey, score = 0, status = 'registered', eventDate = '', note = '' }) {
+function clampLocalScore(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(-180, Math.min(300, Math.round(n * 10) / 10));
+}
+
+async function saveActivityRecord({
+  activityId,
+  title,
+  moduleKey,
+  rubricKey = '',
+  score = 0,
+  status = 'registered',
+  eventDate = '',
+  note = '',
+}) {
   if (state.studentBackendMode) {
     const data = await studentApiRequest('/api/student/records/activity', 'POST', {
       activityId,
       title,
       moduleKey,
+      rubricKey,
       score,
       status,
       eventDate,
@@ -751,7 +771,8 @@ async function saveActivityRecord({ activityId, title, moduleKey, score = 0, sta
         activity_id: aid,
         title: String(title || '').slice(0, 140),
         module_key: BUCT_MODULE_MAP[moduleKey] ? moduleKey : 'moral',
-        score: status === 'attended' ? Math.max(0, Number(score) || 0) : 0,
+        rubric_key: rubricKey && BUCT_RUBRIC_MAP[rubricKey] ? rubricKey : '',
+        score: status === 'attended' ? clampLocalScore(score) : 0,
         status: status === 'attended' ? 'attended' : 'registered',
         event_date: eventDate || now.slice(0, 10),
         note: note || '',
@@ -767,12 +788,61 @@ async function saveActivityRecord({ activityId, title, moduleKey, score = 0, sta
   renderFilteredLocal();
 }
 
-async function saveManualRecord({ id = null, title, moduleKey, score, eventDate, note }) {
+async function saveRubricRecord({ rubricKey, moduleKey, title, score = 0, eventDate = '', note = '', silentRender = false }) {
+  const item = BUCT_RUBRIC_MAP[rubricKey];
+  if (!item) return;
+  const modKey = moduleKey || item.module;
+  const safeScore = clampLocalScore(score);
+  const safeTitle = title || item.title;
+  const safeDate = eventDate || new Date().toISOString().slice(0, 10);
+
+  if (state.studentBackendMode) {
+    const data = await studentApiRequest('/api/student/records/rubric', 'POST', {
+      rubricKey,
+      moduleKey: modKey,
+      title: safeTitle,
+      score: safeScore,
+      eventDate: safeDate,
+      note,
+    });
+    state.studentRecords = data.records || [];
+  } else {
+    const now = new Date().toISOString();
+    const idx = state.studentRecords.findIndex((r) => r.activity_id == null && r.rubric_key === rubricKey);
+    if (safeScore === 0) {
+      if (idx >= 0) state.studentRecords.splice(idx, 1);
+    } else {
+      const rec = {
+        id: idx >= 0 ? state.studentRecords[idx].id : Date.now() + Math.floor(Math.random() * 1000),
+        activity_id: null,
+        title: String(safeTitle).slice(0, 140),
+        module_key: modKey,
+        rubric_key: rubricKey,
+        score: safeScore,
+        status: 'attended',
+        event_date: safeDate,
+        note: note || '',
+        created_at: idx >= 0 ? state.studentRecords[idx].created_at : now,
+        updated_at: now,
+      };
+      if (idx >= 0) state.studentRecords[idx] = rec;
+      else state.studentRecords.unshift(rec);
+    }
+    persistLocalStudentRecords();
+  }
+  if (!silentRender) {
+    updateStudentUI();
+    renderFilteredLocal();
+  }
+}
+
+async function saveManualRecord({ id = null, title, moduleKey, rubricKey = '', score, eventDate, note }) {
   if (state.studentBackendMode) {
     const data = id
       ? await studentApiRequest(`/api/student/records/${id}`, 'PUT', {
           title,
           moduleKey,
+          rubricKey,
           score,
           status: 'attended',
           eventDate,
@@ -781,6 +851,7 @@ async function saveManualRecord({ id = null, title, moduleKey, score, eventDate,
       : await studentApiRequest('/api/student/records/manual', 'POST', {
           title,
           moduleKey,
+          rubricKey,
           score,
           eventDate,
           note,
@@ -788,6 +859,8 @@ async function saveManualRecord({ id = null, title, moduleKey, score, eventDate,
     state.studentRecords = data.records || [];
   } else {
     const now = new Date().toISOString();
+    const safeScore = clampLocalScore(score);
+    const safeRk = rubricKey && BUCT_RUBRIC_MAP[rubricKey] ? rubricKey : '';
     if (id) {
       const idx = state.studentRecords.findIndex((r) => Number(r.id) === Number(id));
       if (idx >= 0) {
@@ -795,7 +868,8 @@ async function saveManualRecord({ id = null, title, moduleKey, score, eventDate,
           ...state.studentRecords[idx],
           title,
           module_key: BUCT_MODULE_MAP[moduleKey] ? moduleKey : 'moral',
-          score: Math.max(0, Number(score) || 0),
+          rubric_key: safeRk,
+          score: safeScore,
           status: 'attended',
           event_date: eventDate || now.slice(0, 10),
           note: note || '',
@@ -808,7 +882,8 @@ async function saveManualRecord({ id = null, title, moduleKey, score, eventDate,
         activity_id: null,
         title,
         module_key: BUCT_MODULE_MAP[moduleKey] ? moduleKey : 'moral',
-        score: Math.max(0, Number(score) || 0),
+        rubric_key: safeRk,
+        score: safeScore,
         status: 'attended',
         event_date: eventDate || now.slice(0, 10),
         note: note || '',
@@ -839,65 +914,7 @@ function getRecordForActivity(activityId) {
 }
 
 function computeCreditSummary() {
-  const byMod = {};
-  for (const m of BUCT_MODULES) {
-    byMod[m.key] = { ...m, raw: 0, capped: 0, gap: m.max, full: false, count: 0 };
-  }
-  let attendedCount = 0;
-  let registeredCount = 0;
-  for (const r of state.studentRecords) {
-    if (r.status === 'attended') {
-      attendedCount += 1;
-      const key = BUCT_MODULE_MAP[r.module_key] ? r.module_key : 'moral';
-      byMod[key].raw += Math.max(0, Number(r.score) || 0);
-      byMod[key].count += 1;
-    } else if (r.status === 'registered') {
-      registeredCount += 1;
-    }
-  }
-  let totalValid = 0;
-  let totalRaw = 0;
-  for (const m of BUCT_MODULES) {
-    const s = byMod[m.key];
-    s.raw = Math.round(s.raw * 10) / 10;
-    s.capped = Math.min(s.raw, m.max);
-    s.gap = Math.max(0, Math.round((m.max - s.capped) * 10) / 10);
-    s.full = s.capped >= m.max;
-    totalValid += s.capped;
-    totalRaw += s.raw;
-  }
-  totalValid = Math.round(totalValid * 10) / 10;
-  totalRaw = Math.round(totalRaw * 10) / 10;
-
-  // Pending settlement: registered activities whose reg_end_at or event_end_at or reg_start_at+2h has passed
-  const now = Date.now();
-  const pendingSettle = state.studentRecords.filter((r) => {
-    if (r.status !== 'registered') return false;
-    const act = state.allItems.find((a) => Number(a.id) === Number(r.activity_id));
-    if (!act) return true;
-    const evEnd = parseIsoMs(act.event_end_at);
-    const regEnd = parseIsoMs(act.reg_end_at);
-    const regStart = parseIsoMs(act.reg_start_at);
-    if (evEnd && now > evEnd) return true;
-    if (regEnd && now > regEnd) return true;
-    if (regStart && now > regStart + 2 * 3600 * 1000) return true;
-    return false;
-  });
-
-  const level = Math.min(10, Math.floor(totalValid / 60) + 1);
-  const rankNames = ['见习新生', '校园游侠', '二课猎手', '进阶学者', '满绩勇者', '北化传奇'];
-  const rankTitle = rankNames[Math.min(level - 1, rankNames.length - 1)];
-
-  return {
-    byMod,
-    totalValid,
-    totalRaw,
-    attendedCount,
-    registeredCount,
-    pendingSettle,
-    level,
-    rankTitle,
-  };
+  return computeDetailedCreditSummary(state.studentRecords, state.allItems, parseIsoMs);
 }
 
 function requireStudentAuth(callback) {
@@ -1026,11 +1043,165 @@ function renderCreditSheetContent(summary) {
   document.getElementById('ctabHistory').classList.toggle('hidden', state.creditTab !== 'history');
   requestAnimationFrame(() => syncLiquidTrack('creditTabs', '.credit-tab.active'));
 
-  // Tab 1: 5-Module Progress Bars (AnimatedCount + Spring Bar + Pixel 10-Cell Segmented HP Bar)
+  // Tab 1: 五大模块进度 + 可展开细则点选清单（基础评定 + 拓展评定，全程免打字）
+  const sheetBody = document.getElementById('creditSheetBody');
+  const prevScrollTop = sheetBody ? sheetBody.scrollTop : 0;
   const modList = document.getElementById('moduleBarsList');
   const prevScores = state.prevModScores || {};
   const nextPrevScores = {};
   const fillTransitions = [];
+
+  const renderRubricItemControl = (it, st) => {
+    const scoreText =
+      st.effective < 0
+        ? `${st.effective}分`
+        : st.effective > 0
+        ? `+${st.effective}分${st.capped ? '·满' : ''}`
+        : '未填';
+    const badgeCls = st.effective < 0 ? 'neg' : st.effective > 0 ? 'pos' : '';
+    const actNote =
+      st.actCount > 0
+        ? `<div class="rb-act-note">✓ 已含活动卡片打卡 ${st.actCount} 项（+${st.actScore}分）</div>`
+        : '';
+    const grp = it.group ? summary.groupTotals[it.group] : null;
+    const grpNote = grp
+      ? `<div class="rb-act-note" style="color:${grp.full ? '#12994a' : 'var(--text-2)'}">小组封顶：合计 ${grp.capped} / ${grp.cap} 分</div>`
+      : '';
+
+    let ctrlHtml = '';
+    if (it.kind === 'chips') {
+      ctrlHtml = `
+        <div class="rb-chips">
+          ${it.options
+            .map((opt, idx) => {
+              const isAct = opt.zeroTag
+                ? Boolean(st.directRec && st.directScore === 0 && /通报2/.test(st.directRec.note || ''))
+                : opt.score === 0
+                ? !st.directRec && st.directScore === 0
+                : Math.abs(st.directScore - opt.score) < 0.05;
+              const valLabel = opt.score > 0 ? ` +${opt.score}` : opt.score < 0 ? ` ${opt.score}` : '';
+              return `<button type="button" class="rb-chip ${it.deductOnly && opt.score < 0 ? 'danger' : ''} ${
+                isAct ? 'active' : ''
+              }" data-rb-set="${it.key}" data-rb-score="${opt.score}" data-rb-label="${escapeHtml(
+                opt.label
+              )}" data-rb-idx="${idx}">${escapeHtml(opt.label)}${valLabel}</button>`;
+            })
+            .join('')}
+        </div>
+      `;
+    } else if (it.kind === 'stepper') {
+      const cnt = st.directCount;
+      const curVal = Math.round(cnt * it.step * 10) / 10;
+      ctrlHtml = `
+        <div class="rb-stepper-row">
+          <div class="rb-stepper">
+            <button type="button" class="rb-step-btn" data-rb-step="${it.key}" data-rb-delta="-1" ${
+              cnt <= 0 ? 'disabled' : ''
+            } aria-label="减少">−</button>
+            <span class="rb-step-val">${cnt}${it.unit}${curVal > 0 ? ` (+${curVal}分)` : ''}</span>
+            <button type="button" class="rb-step-btn" data-rb-step="${it.key}" data-rb-delta="1" ${
+              cnt >= it.maxCount ? 'disabled' : ''
+            } aria-label="增加">＋</button>
+          </div>
+          ${
+            cnt > 0
+              ? `<button type="button" class="rb-chip" data-rb-set="${it.key}" data-rb-score="0" data-rb-label="清零">清零</button>`
+              : `<button type="button" class="rb-chip" data-rb-set="${it.key}" data-rb-score="${it.cap}" data-rb-label="${it.maxCount}${it.unit}拉满">一键拉满 +${it.cap}</button>`
+          }
+        </div>
+      `;
+    } else if (it.kind === 'miss_stepper') {
+      const hasRec = Boolean(st.directRec) || st.directScore > 0;
+      const miss = hasRec ? Math.max(0, Math.min(it.maxMiss, Math.round((it.fullScore - st.directScore) / it.deductPerMiss))) : -1;
+      ctrlHtml = `
+        <div class="rb-stepper-row">
+          <button type="button" class="rb-chip ${!hasRec ? 'active' : ''}" data-rb-set="${it.key}" data-rb-score="0" data-rb-label="未填">未填</button>
+          <button type="button" class="rb-chip ${miss === 0 ? 'active' : ''}" data-rb-set="${it.key}" data-rb-score="${it.fullScore}" data-rb-label="全勤">全勤 +${it.fullScore}</button>
+          <div class="rb-stepper">
+            <button type="button" class="rb-step-btn" data-rb-miss="${it.key}" data-rb-delta="-1" ${
+              miss <= 0 ? 'disabled' : ''
+            } aria-label="减少缺勤">−</button>
+            <span class="rb-step-val">${miss > 0 ? `缺${miss}次 (+${st.directScore})` : '缺勤次数'}</span>
+            <button type="button" class="rb-step-btn" data-rb-miss="${it.key}" data-rb-delta="1" ${
+              miss >= it.maxMiss ? 'disabled' : ''
+            } aria-label="增加缺勤">＋</button>
+          </div>
+        </div>
+      `;
+    } else if (it.kind === 'award') {
+      const isHalf = st.isCollective;
+      ctrlHtml = `
+        <div class="rb-chips">
+          ${it.options
+            .map((opt) => {
+              const effOptScore = isHalf && !opt.noHalf ? Math.round((opt.score / 2) * 10) / 10 : opt.score;
+              const isAct =
+                opt.score === 0
+                  ? st.directScore === 0
+                  : Math.abs(st.directScore - effOptScore) < 0.05 ||
+                    (!isHalf && Math.abs(st.directScore - opt.score) < 0.05);
+              const valLabel = effOptScore > 0 ? ` +${effOptScore}` : '';
+              return `<button type="button" class="rb-chip ${isAct ? 'active' : ''}" data-rb-award="${it.key}" data-rb-base="${opt.score}" data-rb-nohalf="${
+                opt.noHalf ? '1' : '0'
+              }" data-rb-label="${escapeHtml(opt.label)}">${escapeHtml(opt.label)}${valLabel}</button>`;
+            })
+            .join('')}
+        </div>
+        ${
+          it.collectiveHalf
+            ? `<div class="rb-stepper-row"><button type="button" class="rb-half-btn ${
+                isHalf ? 'active' : ''
+              }" data-rb-half="${it.key}">👥 集体获奖半数计分 ×0.5${isHalf ? '（已开启）' : ''}</button></div>`
+            : ''
+        }
+      `;
+    }
+
+    return `
+      <div class="rubric-item ${st.effective > 0 ? 'is-filled' : ''} ${st.effective < 0 ? 'is-deduct' : ''}">
+        <div class="rb-top">
+          <span class="rb-title">${escapeHtml(it.title)}</span>
+          <span class="rb-score-badge ${badgeCls}">${scoreText}</span>
+        </div>
+        <div class="rb-hint">${escapeHtml(it.hint)}</div>
+        ${actNote}
+        ${grpNote}
+        ${ctrlHtml}
+      </div>
+    `;
+  };
+
+  const renderRubricDrawerHtml = (m, s) => {
+    const baseItems = getRubricItemsForModule(m.key, 'base');
+    const extItems = getRubricItemsForModule(m.key, 'ext');
+    return `
+      <div class="rubric-drawer">
+        <div>
+          <div class="rubric-sec-head">
+            <span class="rubric-sec-title">基础评定（上限 ${m.baseMax} 分）</span>
+            <span class="rubric-sec-badge ${s.baseCapped >= m.baseMax ? 'full' : ''}">${s.baseCapped} / ${m.baseMax} 分${
+              s.baseCapped >= m.baseMax ? ' · 已满' : ''
+            }</span>
+          </div>
+          <div class="rubric-items-col">
+            ${baseItems.map((it) => renderRubricItemControl(it, summary.itemStats[it.key])).join('')}
+          </div>
+        </div>
+        <div>
+          <div class="rubric-sec-head">
+            <span class="rubric-sec-title">拓展评定（上限 ${m.extMax} 分）</span>
+            <span class="rubric-sec-badge ${s.extCapped >= m.extMax ? 'full' : ''}">${s.extCapped} / ${m.extMax} 分${
+              s.extCapped >= m.extMax ? ' · 已满' : ''
+            }</span>
+          </div>
+          <div class="rubric-items-col">
+            ${extItems.map((it) => renderRubricItemControl(it, summary.itemStats[it.key])).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
   modList.innerHTML = BUCT_MODULES.map((m) => {
     const s = summary.byMod[m.key];
     const pct = Math.min(100, Math.round((s.capped / m.max) * 100));
@@ -1039,22 +1210,37 @@ function renderCreditSheetContent(summary) {
     if (startPct !== pct) fillTransitions.push({ key: m.key, pct });
     nextPrevScores[m.key] = s.capped;
     const filledCells = Math.min(10, Math.round((s.capped / m.max) * 10));
+    const isExpanded = state.expandedRubricMod === m.key;
     const gapHtml = s.full
       ? '<span class="mod-gap full">✓ 已修满</span>'
       : `<span class="mod-gap">还差 ${s.gap} 分</span>`;
     return `
-      <div class="mod-row" style="--mc:${m.color}">
-        <div class="mod-row-top">
-          <span class="mod-name"><span class="mod-dot"></span>${m.name}</span>
-          <span class="mod-nums"><span class="mod-num-val" data-mod-key="${m.key}">${prevVal !== undefined ? prevVal : s.capped}</span> / ${m.max}${gapHtml}</span>
-        </div>
-        <div class="mod-track"><div class="mod-fill" data-mod-fill="${m.key}" style="width:${startPct}%"></div></div>
-        <div class="mod-px-cells">
-          ${Array.from({ length: 10 }, (_, i) => `<span class="mod-px-cell ${i < filledCells ? 'filled' : ''}"></span>`).join('')}
-        </div>
+      <div class="mod-row ${isExpanded ? 'expanded' : ''}" style="--mc:${m.color}">
+        <button type="button" class="mod-row-head" data-toggle-mod="${m.key}" aria-expanded="${isExpanded}">
+          <div class="mod-row-top">
+            <span class="mod-name"><span class="mod-dot"></span>${m.name}</span>
+            <span class="mod-nums"><span class="mod-num-val" data-mod-key="${m.key}">${
+              prevVal !== undefined ? prevVal : s.capped
+            }</span> / ${m.max}${gapHtml}</span>
+          </div>
+          <div class="mod-track"><div class="mod-fill" data-mod-fill="${m.key}" style="width:${startPct}%"></div></div>
+          <div class="mod-px-cells">
+            ${Array.from({ length: 10 }, (_, i) => `<span class="mod-px-cell ${i < filledCells ? 'filled' : ''}"></span>`).join('')}
+          </div>
+          <div class="mod-sub-split">
+            <span class="mod-split-tags">
+              <span class="mod-split-tag ${s.baseCapped >= m.baseMax ? 'full' : ''}">基础 <strong>${s.baseCapped}/${m.baseMax}</strong></span>
+              <span class="mod-split-tag ${s.extCapped >= m.extMax ? 'full' : ''}">拓展 <strong>${s.extCapped}/${m.extMax}</strong></span>
+            </span>
+            <span class="mod-expand-pill">${isExpanded ? '收起 ▴' : '点选填报 ▾'}</span>
+          </div>
+        </button>
+        ${isExpanded ? renderRubricDrawerHtml(m, s) : ''}
       </div>
     `;
   }).join('');
+
+  if (sheetBody) sheetBody.scrollTop = prevScrollTop;
 
   modList.querySelectorAll('.mod-num-val[data-mod-key]').forEach((numEl) => {
     const k = numEl.dataset.modKey;
@@ -1117,18 +1303,23 @@ function renderCreditSheetContent(summary) {
     histEl.innerHTML = histRecords
       .map((r) => {
         const mod = BUCT_MODULE_MAP[r.module_key] || BUCT_MODULES[0];
+        const rub = r.rubric_key ? BUCT_RUBRIC_MAP[r.rubric_key] : null;
+        const secTag = rub ? (rub.section === 'ext' ? '拓展评定' : '基础评定') : '';
+        const isNeg = Number(r.score) < 0;
+        const scoreDisp = isNeg ? `${r.score}分` : `+${r.score}分`;
         return `
           <div class="rec-item">
             <div class="rec-main">
               <div class="rec-title">${escapeHtml(r.title)}</div>
               <div class="rec-meta">
-                <span style="color:${mod.color};font-weight:700">${mod.name}</span>
+                <span style="color:${mod.color};font-weight:700">${mod.shortName || mod.name}</span>
+                ${secTag ? `<span>${secTag}</span>` : ''}
                 <span>${escapeHtml(r.event_date || (r.updated_at || '').slice(0, 10))}</span>
                 ${r.note ? `<span>${escapeHtml(r.note)}</span>` : ''}
               </div>
             </div>
             <div class="rec-side">
-              <span class="rec-score-pill">+${r.score}分</span>
+              <span class="rec-score-pill ${isNeg ? 'neg' : ''}">${scoreDisp}</span>
               <button type="button" class="rec-del-btn" data-edit-rec-id="${r.id}" title="修改">✎</button>
               <button type="button" class="rec-del-btn" data-del-rec-id="${r.id}" title="删除">✕</button>
             </div>
@@ -1139,33 +1330,84 @@ function renderCreditSheetContent(summary) {
   }
 }
 
-/* ==================== 记分确认弹窗 / 手动补录 / 同步口令 ==================== */
+/* ==================== 记分确认弹窗 / 零打字点选补录 / 同步口令 ==================== */
+function buildRubricSelectOptionsHtml(moduleKey, selectedKey = '') {
+  const baseItems = getRubricItemsForModule(moduleKey, 'base');
+  const extItems = getRubricItemsForModule(moduleKey, 'ext');
+  const m = BUCT_MODULE_MAP[moduleKey];
+  const opt = (it) =>
+    `<option value="${it.key}" ${it.key === selectedKey ? 'selected' : ''}>${escapeHtml(it.title)}（上限${it.cap}）</option>`;
+  return `
+    <optgroup label="基础评定（上限 ${m?.baseMax || 80} 分）">${baseItems.map(opt).join('')}</optgroup>
+    <optgroup label="拓展评定（上限 ${m?.extMax || 20} 分）">${extItems.map(opt).join('')}</optgroup>
+  `;
+}
+
+function syncAttendModalRubricAndScores(moduleKey, preferredRubricKey = '', preferredScore = null) {
+  const rubSelect = document.getElementById('amRubric');
+  const modItems = getRubricItemsForModule(moduleKey);
+  const chosenKey =
+    preferredRubricKey && BUCT_RUBRIC_MAP[preferredRubricKey]?.module === moduleKey
+      ? preferredRubricKey
+      : modItems[0]?.key || '';
+  rubSelect.innerHTML = buildRubricSelectOptionsHtml(moduleKey, chosenKey);
+  rubSelect.value = chosenKey;
+
+  const rub = BUCT_RUBRIC_MAP[chosenKey];
+  const item = state.pendingAttendActivity?.item;
+  const presets = [];
+  if (rub) {
+    if (rub.kind === 'stepper') {
+      presets.push({ label: `1${rub.unit} (+${rub.step}分)`, score: rub.step });
+      if (rub.maxCount >= 2) presets.push({ label: `2${rub.unit} (+${Math.min(rub.cap, rub.step * 2)}分)`, score: Math.min(rub.cap, rub.step * 2) });
+    } else {
+      for (const o of getRubricOptionPresets(rub.key)) {
+        if (o.score !== 0) presets.push({ label: `${o.label} (${o.score > 0 ? '+' : ''}${o.score}分)`, score: o.score });
+      }
+    }
+  }
+  const candidates = item ? extractScoreCandidates(item) : [];
+  for (const c of candidates) {
+    if (!presets.some((p) => Math.abs(p.score - c) < 0.05)) {
+      presets.push({ label: `推文标注 +${c}分`, score: c });
+    }
+  }
+  const finalScore =
+    preferredScore !== null && Number.isFinite(Number(preferredScore))
+      ? Number(preferredScore)
+      : presets[0]?.score ?? 10;
+
+  document.getElementById('amScore').value = String(finalScore);
+  const qWrap = document.getElementById('amQuickScores');
+  qWrap.innerHTML = presets
+    .slice(0, 6)
+    .map(
+      (p) =>
+        `<button type="button" class="rm-quick-btn ${Math.abs(p.score - finalScore) < 0.05 ? 'active' : ''}" data-qscore="${p.score}">${escapeHtml(
+          p.label
+        )}</button>`
+    )
+    .join('');
+}
+
 function openAttendModalForActivity(item, existingRec = null) {
   requireStudentAuth(() => {
-    const inferredMod = existingRec?.module_key || inferModuleKeyFromItem(item);
-    const candidates = extractScoreCandidates(item);
+    const inferred = inferRubricForActivity(item, existingRec?.module_key || '');
+    const inferredMod = existingRec?.module_key || inferred.moduleKey;
+    const inferredRub = existingRec?.rubric_key || inferred.rubricKey;
     const defaultScore =
-      existingRec && existingRec.status === 'attended' && existingRec.score > 0
+      existingRec && existingRec.status === 'attended' && Number(existingRec.score) !== 0
         ? existingRec.score
-        : candidates[0] || 10;
+        : inferred.defaultScore;
 
     state.pendingAttendActivity = { item, existingRec };
     document.getElementById('amTitle').textContent =
       state.uiStyle === 'pixel' ? '🏆 交付悬赏 · 领取二课学分' : '确认参加并记录二课成绩';
     document.getElementById('amActName').textContent = item.title;
     document.getElementById('amHint').textContent =
-      item.credit_hint || '系统已自动匹配所属模块，可按实际加分确认或修改分值。';
+      item.credit_hint || '已按北化官方细则自动匹配模块与对应项，直接点选确认即可。';
     document.getElementById('amModule').value = inferredMod;
-    document.getElementById('amScore').value = String(defaultScore);
-
-    const quickChoices = candidates.length ? [...new Set([...candidates, 5, 10, 15])].slice(0, 5) : [5, 6, 10, 15, 20];
-    const qWrap = document.getElementById('amQuickScores');
-    qWrap.innerHTML = quickChoices
-      .map(
-        (v) =>
-          `<button type="button" class="rm-quick-btn ${Number(v) === Number(defaultScore) ? 'active' : ''}" data-qscore="${v}">+${v}分</button>`
-      )
-      .join('');
+    syncAttendModalRubricAndScores(inferredMod, inferredRub, defaultScore);
 
     document.getElementById('attendModal').classList.remove('hidden');
     haptic(10);
@@ -1177,15 +1419,111 @@ function closeAttendModal() {
   state.pendingAttendActivity = null;
 }
 
+function renderManualPickerState() {
+  const modPillsEl = document.getElementById('mcModPills');
+  const rubSelect = document.getElementById('mcRubricSelect');
+  const hintEl = document.getElementById('mcRuleHint');
+  const optEl = document.getElementById('mcOptionPills');
+  const collWrap = document.getElementById('mcCollectiveWrap');
+  const collBtn = document.getElementById('mcCollectiveBtn');
+  const previewEl = document.getElementById('mcAutoPreview');
+
+  document.getElementById('mcModule').value = state.mcSelectedMod;
+  modPillsEl.innerHTML = BUCT_MODULES.map(
+    (m) =>
+      `<button type="button" class="rb-chip ${m.key === state.mcSelectedMod ? 'active' : ''}" data-mc-mod="${m.key}">${escapeHtml(
+        m.shortName
+      )}</button>`
+  ).join('');
+
+  const modItems = getRubricItemsForModule(state.mcSelectedMod);
+  if (!BUCT_RUBRIC_MAP[state.mcSelectedRubric] || BUCT_RUBRIC_MAP[state.mcSelectedRubric].module !== state.mcSelectedMod) {
+    state.mcSelectedRubric = modItems[0]?.key || 'moral_base_demo';
+  }
+  rubSelect.innerHTML = buildRubricSelectOptionsHtml(state.mcSelectedMod, state.mcSelectedRubric);
+  rubSelect.value = state.mcSelectedRubric;
+
+  const rub = BUCT_RUBRIC_MAP[state.mcSelectedRubric];
+  hintEl.textContent = rub ? `${rub.section === 'ext' ? '【拓展评定】' : '【基础评定】'}${rub.hint}` : '';
+
+  const presets = getRubricOptionPresets(state.mcSelectedRubric);
+  const showColl = Boolean(rub && rub.collectiveHalf);
+  collWrap.classList.toggle('hidden', !showColl);
+  if (showColl) {
+    collBtn.classList.toggle('active', state.mcCollective);
+    collBtn.textContent = state.mcCollective
+      ? '👥 集体获奖（按半数计分 ×0.5 · 已开启）'
+      : '👥 集体获奖（按半数计分 ×0.5）';
+  }
+
+  optEl.innerHTML = presets
+    .map((p) => {
+      const eff = showColl && state.mcCollective && !p.noHalf ? Math.round((p.score / 2) * 10) / 10 : p.score;
+      const isAct = Math.abs(Number(state.mcSelectedScore) - eff) < 0.05 && state.mcSelectedLabel === p.label;
+      const valTxt = eff > 0 ? ` +${eff}` : eff < 0 ? ` ${eff}` : ' 0';
+      return `<button type="button" class="rm-quick-btn ${isAct ? 'active' : ''}" data-mc-opt-score="${eff}" data-mc-opt-base="${
+        p.score
+      }" data-mc-opt-nohalf="${p.noHalf ? '1' : '0'}" data-mc-opt-label="${escapeHtml(p.label)}">${escapeHtml(
+        p.label
+      )}${valTxt}</button>`;
+    })
+    .join('');
+
+  const autoTitle = rub
+    ? `${rub.title}${state.mcSelectedLabel && state.mcSelectedLabel !== '未填' ? ` · ${state.mcSelectedLabel}` : ''}`
+    : '二课补录';
+  const autoNote = rub
+    ? `${rub.section === 'ext' ? '拓展评定' : '基础评定'}${
+        showColl && state.mcCollective ? ' · 集体获奖半数计分' : ''
+      }`
+    : '';
+
+  if (!state.mcCustomTouched) {
+    document.getElementById('mcName').value = autoTitle;
+    document.getElementById('mcScore').value = String(state.mcSelectedScore);
+    document.getElementById('mcNote').value = autoNote;
+  }
+
+  const finalScore = Number(document.getElementById('mcScore').value) || 0;
+  const finalTitle = document.getElementById('mcName').value.trim() || autoTitle;
+  const scoreBadge = finalScore < 0 ? `${finalScore}分` : `+${finalScore}分`;
+  previewEl.innerHTML = `
+    <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">将记入：${escapeHtml(finalTitle)}</span>
+    <span class="rec-score-pill ${finalScore < 0 ? 'neg' : ''}">${scoreBadge}</span>
+  `;
+}
+
 function openManualCreditModal(prefill = null) {
   requireStudentAuth(() => {
     state.editingManualId = prefill?.id || null;
-    document.getElementById('mcTitle').textContent = state.editingManualId ? '修改二课成绩记录' : '手动增加二课成绩';
-    document.getElementById('mcName').value = prefill?.title || '';
-    document.getElementById('mcModule').value = prefill?.module_key || 'moral';
-    document.getElementById('mcScore').value = prefill?.score !== undefined ? String(prefill.score) : '10';
+    state.mcCustomTouched = Boolean(prefill?.id);
+    const modKey = prefill?.module_key && BUCT_MODULE_MAP[prefill.module_key] ? prefill.module_key : state.expandedRubricMod || 'moral';
+    const modItems = getRubricItemsForModule(modKey);
+    const rubKey =
+      prefill?.rubric_key && BUCT_RUBRIC_MAP[prefill.rubric_key]
+        ? prefill.rubric_key
+        : modItems[0]?.key || 'moral_base_demo';
+    const presets = getRubricOptionPresets(rubKey);
+    const firstNonZero = presets.find((p) => p.score > 0) || presets[0] || { label: '', score: 10 };
+
+    state.mcSelectedMod = modKey;
+    state.mcSelectedRubric = rubKey;
+    state.mcCollective = Boolean(prefill?.note && /集体/.test(prefill.note));
+    state.mcSelectedScore = prefill?.score !== undefined ? Number(prefill.score) : firstNonZero.score;
+    state.mcSelectedLabel = prefill?.id ? '' : firstNonZero.label;
+
+    document.getElementById('mcTitle').textContent = state.editingManualId ? '修改二课成绩记录' : '点选增加二课成绩（免打字）';
     document.getElementById('mcDate').value = prefill?.event_date || new Date().toISOString().slice(0, 10);
-    document.getElementById('mcNote').value = prefill?.note || '';
+    if (prefill?.id) {
+      document.getElementById('mcName').value = prefill.title || '';
+      document.getElementById('mcScore').value = String(prefill.score ?? 0);
+      document.getElementById('mcNote').value = prefill.note || '';
+      document.getElementById('mcCustomDetails').open = true;
+    } else {
+      document.getElementById('mcCustomDetails').open = false;
+    }
+
+    renderManualPickerState();
     document.getElementById('manualCreditModal').classList.remove('hidden');
     haptic(8);
   });
@@ -1194,18 +1532,20 @@ function openManualCreditModal(prefill = null) {
 function closeManualCreditModal() {
   document.getElementById('manualCreditModal').classList.add('hidden');
   state.editingManualId = null;
+  state.mcCustomTouched = false;
 }
 
 function buildSyncCodeString() {
   if (!state.studentUser) return '';
   const payload = {
-    v: 1,
+    v: 2,
     u: state.studentUser.username,
     d: state.studentUser.display_name,
     r: state.studentRecords.map((r) => ({
       activity_id: r.activity_id ?? null,
       title: r.title,
       module_key: r.module_key,
+      rubric_key: r.rubric_key || '',
       score: r.score,
       status: r.status,
       event_date: r.event_date || '',
@@ -1247,10 +1587,12 @@ function exportCreditsCsv() {
     showGlassToast('当前还没有已参加的成绩记录', 'warn');
     return;
   }
-  const rows = [['活动名称', '所属模块', '分值', '日期', '备注']];
+  const rows = [['活动/细则名称', '所属模块', '评定类别', '对应细则', '分值', '日期', '备注']];
   for (const r of attended) {
     const mod = BUCT_MODULE_MAP[r.module_key]?.name || r.module_key;
-    rows.push([r.title, mod, String(r.score), r.event_date || '', r.note || '']);
+    const rub = r.rubric_key ? BUCT_RUBRIC_MAP[r.rubric_key] : null;
+    const secName = rub ? (rub.section === 'ext' ? '拓展评定' : '基础评定') : '基础评定';
+    rows.push([r.title, mod, secName, rub ? rub.title : '', String(r.score), r.event_date || '', r.note || '']);
   }
   const csv = '\uFEFF' + rows.map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -2663,17 +3005,184 @@ document.getElementById('exportCsvBtn').addEventListener('click', exportCreditsC
 document.getElementById('openSyncCodeBtn').addEventListener('click', openSyncCodeModal);
 document.getElementById('openImportFromAuthBtn').addEventListener('click', openSyncCodeModal);
 
-document.getElementById('mqPresets').addEventListener('click', (e) => {
-  const chip = e.target.closest('[data-preset-title]');
-  if (!chip) return;
-  openManualCreditModal({
-    title: chip.dataset.presetTitle,
-    module_key: chip.dataset.presetMod,
-    score: Number(chip.dataset.presetScore || 10),
+document.getElementById('fillBaselineBtn').addEventListener('click', async () => {
+  requireStudentAuth(async () => {
+    const summary = computeCreditSummary();
+    let filled = 0;
+    for (const preset of BUCT_BASELINE_PRESETS) {
+      const st = summary.itemStats[preset.rubricKey];
+      if (!st || st.directScore === 0) {
+        await saveRubricRecord({
+          rubricKey: preset.rubricKey,
+          title: preset.title,
+          score: preset.score,
+          note: preset.note,
+          silentRender: true,
+        });
+        filled += 1;
+      }
+    }
+    updateStudentUI();
+    renderFilteredLocal();
+    if (filled > 0) {
+      showGlassToast(`⚡ 已一键填入 ${filled} 项常规基础分（可随时点选微调）`, 'success');
+      haptic(16);
+    } else {
+      showGlassToast('常规基础项已全部填好，无需重复填入');
+    }
   });
 });
 
 document.getElementById('creditSheetBody').addEventListener('click', async (e) => {
+  // 展开 / 收起模块细则点选清单
+  const modToggle = e.target.closest('[data-toggle-mod]');
+  if (modToggle) {
+    const mk = modToggle.dataset.toggleMod;
+    state.expandedRubricMod = state.expandedRubricMod === mk ? '' : mk;
+    updateStudentUI();
+    haptic(6);
+    return;
+  }
+
+  // 细则项：单选胶囊点选（chips / miss_stepper 快捷键 / stepper 清零或拉满）
+  const rbSetBtn = e.target.closest('[data-rb-set]');
+  if (rbSetBtn) {
+    const rk = rbSetBtn.dataset.rbSet;
+    const it = BUCT_RUBRIC_MAP[rk];
+    if (!it) return;
+    const score = Number(rbSetBtn.dataset.rbScore) || 0;
+    const label = rbSetBtn.dataset.rbLabel || '';
+    const secName = it.section === 'ext' ? '拓展评定' : '基础评定';
+    await saveRubricRecord({
+      rubricKey: rk,
+      moduleKey: it.module,
+      title: `${it.title}${label && label !== '未填' && label !== '清零' ? ` · ${label}` : ''}`,
+      score,
+      note: `${secName}${label ? ` · ${label}` : ''}`,
+    });
+    const scoreTxt = score === 0 ? '已清空' : score > 0 ? `+${score}分` : `${score}分`;
+    showGlassToast(`${it.title}：${scoreTxt}`, score < 0 ? 'warn' : score > 0 ? 'success' : 'default');
+    haptic(10);
+    return;
+  }
+
+  // 细则项：次数 / 学时 / 超额时长 步进器 (+/-)
+  const rbStepBtn = e.target.closest('[data-rb-step]');
+  if (rbStepBtn) {
+    const rk = rbStepBtn.dataset.rbStep;
+    const it = BUCT_RUBRIC_MAP[rk];
+    if (!it) return;
+    const delta = Number(rbStepBtn.dataset.rbDelta) || 0;
+    const summary = computeCreditSummary();
+    const curCnt = summary.itemStats[rk]?.directCount || 0;
+    const nextCnt = Math.max(0, Math.min(it.maxCount, curCnt + delta));
+    const nextScore = Math.round(Math.min(it.cap, nextCnt * it.step) * 10) / 10;
+    const secName = it.section === 'ext' ? '拓展评定' : '基础评定';
+    await saveRubricRecord({
+      rubricKey: rk,
+      moduleKey: it.module,
+      title: `${it.title} · ${nextCnt}${it.unit}`,
+      score: nextScore,
+      note: `${secName} · ${nextCnt}${it.unit}`,
+    });
+    showGlassToast(`${it.title}：${nextCnt}${it.unit}${nextScore > 0 ? ` (+${nextScore}分)` : ''}`, nextScore > 0 ? 'success' : 'default');
+    haptic(8);
+    return;
+  }
+
+  // 细则项：青年大学习缺勤步进器
+  const rbMissBtn = e.target.closest('[data-rb-miss]');
+  if (rbMissBtn) {
+    const rk = rbMissBtn.dataset.rbMiss;
+    const it = BUCT_RUBRIC_MAP[rk];
+    if (!it) return;
+    const delta = Number(rbMissBtn.dataset.rbDelta) || 0;
+    const summary = computeCreditSummary();
+    const st = summary.itemStats[rk];
+    const hasRec = Boolean(st?.directRec) || (st?.directScore || 0) > 0;
+    const curMiss = hasRec ? Math.max(0, Math.round((it.fullScore - st.directScore) / it.deductPerMiss)) : 0;
+    const nextMiss = Math.max(0, Math.min(it.maxMiss, curMiss + delta));
+    const nextScore = Math.max(0, it.fullScore - nextMiss * it.deductPerMiss);
+    const label = nextMiss === 0 ? '全勤' : `缺${nextMiss}次`;
+    await saveRubricRecord({
+      rubricKey: rk,
+      moduleKey: it.module,
+      title: `${it.title} · ${label}`,
+      score: nextScore,
+      note: `基础评定 · ${label}`,
+    });
+    showGlassToast(`青年大学习（${label}）：+${nextScore}分`, 'success');
+    haptic(8);
+    return;
+  }
+
+  // 细则项：获奖等级选择（自动叠加集体获奖 ×0.5 状态）
+  const rbAwardBtn = e.target.closest('[data-rb-award]');
+  if (rbAwardBtn) {
+    const rk = rbAwardBtn.dataset.rbAward;
+    const it = BUCT_RUBRIC_MAP[rk];
+    if (!it) return;
+    const baseScore = Number(rbAwardBtn.dataset.rbBase) || 0;
+    const noHalf = rbAwardBtn.dataset.rbNohalf === '1';
+    const label = rbAwardBtn.dataset.rbLabel || '';
+    const summary = computeCreditSummary();
+    const isHalf = !noHalf && Boolean(summary.itemStats[rk]?.isCollective);
+    const finalScore = baseScore === 0 ? 0 : isHalf ? Math.round((baseScore / 2) * 10) / 10 : baseScore;
+    await saveRubricRecord({
+      rubricKey: rk,
+      moduleKey: it.module,
+      title: `${it.title}${label && label !== '无' ? ` · ${label}` : ''}`,
+      score: finalScore,
+      note: `拓展评定 · ${label}${isHalf ? '（集体获奖半数计分）' : ''}`,
+    });
+    showGlassToast(
+      finalScore > 0 ? `${it.title}：+${finalScore}分${isHalf ? '（集体×0.5）' : ''}` : `${it.title}：已清空`,
+      finalScore > 0 ? 'success' : 'default'
+    );
+    haptic(10);
+    return;
+  }
+
+  // 细则项：集体获奖半数计分 ×0.5 开关
+  const rbHalfBtn = e.target.closest('[data-rb-half]');
+  if (rbHalfBtn) {
+    const rk = rbHalfBtn.dataset.rbHalf;
+    const it = BUCT_RUBRIC_MAP[rk];
+    if (!it) return;
+    const summary = computeCreditSummary();
+    const st = summary.itemStats[rk];
+    if (!st || st.directScore <= 0) {
+      showGlassToast('请先点选上方获奖等级，再切换集体半数', 'warn');
+      return;
+    }
+    const nextHalf = !st.isCollective;
+    // Recover matching base option cleanly
+    const matchedOpt = it.options.find((o) =>
+      o.score > 0 &&
+      (st.isCollective ? Math.abs(o.score / 2 - st.directScore) < 0.05 : Math.abs(o.score - st.directScore) < 0.05)
+    );
+    if (matchedOpt?.noHalf) {
+      showGlassToast('挑战杯/互联网+国家级重大奖直接记本节满分 24 分', 'warn');
+      return;
+    }
+    const baseScore = matchedOpt ? matchedOpt.score : st.isCollective ? st.directScore * 2 : st.directScore;
+    const nextScore = nextHalf ? Math.round((baseScore / 2) * 10) / 10 : Math.round(baseScore * 10) / 10;
+    const label = matchedOpt?.label || '';
+    await saveRubricRecord({
+      rubricKey: rk,
+      moduleKey: it.module,
+      title: `${it.title}${label ? ` · ${label}` : ''}`,
+      score: nextScore,
+      note: `拓展评定 · ${label || '获奖'}${nextHalf ? '（集体获奖半数计分）' : '（个人获奖）'}`,
+    });
+    showGlassToast(
+      nextHalf ? `已切换为集体半数计分：+${nextScore}分` : `已切回个人全额计分：+${nextScore}分`,
+      'success'
+    );
+    haptic(10);
+    return;
+  }
+
   const settleBtn = e.target.closest('[data-settle-rec-id]');
   if (settleBtn) {
     const rec = state.studentRecords.find((r) => Number(r.id) === Number(settleBtn.dataset.settleRecId));
@@ -2710,6 +3219,16 @@ document.getElementById('amCancelBtn').addEventListener('click', closeAttendModa
 document.getElementById('attendModal').addEventListener('click', (e) => {
   if (e.target.id === 'attendModal') closeAttendModal();
 });
+document.getElementById('amModule').addEventListener('change', (e) => {
+  const modKey = e.target.value;
+  const item = state.pendingAttendActivity?.item;
+  const inf = item ? inferRubricForActivity(item, modKey) : { rubricKey: '', defaultScore: null };
+  syncAttendModalRubricAndScores(modKey, inf.rubricKey, inf.defaultScore);
+});
+document.getElementById('amRubric').addEventListener('change', (e) => {
+  const modKey = document.getElementById('amModule').value;
+  syncAttendModalRubricAndScores(modKey, e.target.value, null);
+});
 document.getElementById('amQuickScores').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-qscore]');
   if (!btn) return;
@@ -2721,28 +3240,34 @@ document.getElementById('amSaveBtn').addEventListener('click', async () => {
   if (!state.pendingAttendActivity) return;
   const { item, existingRec } = state.pendingAttendActivity;
   const moduleKey = document.getElementById('amModule').value;
-  const score = Math.max(0, Number(document.getElementById('amScore').value) || 0);
+  const rubricKey = document.getElementById('amRubric').value || '';
+  const score = clampLocalScore(document.getElementById('amScore').value);
+  const rub = BUCT_RUBRIC_MAP[rubricKey];
+  const note = rub ? `${rub.section === 'ext' ? '拓展评定' : '基础评定'} · ${rub.title}` : existingRec?.note || '';
   if (item.id) {
     await saveActivityRecord({
       activityId: item.id,
       title: item.title,
       moduleKey,
+      rubricKey,
       score,
       status: 'attended',
       eventDate: new Date().toISOString().slice(0, 10),
+      note,
     });
   } else if (existingRec?.id) {
     await saveManualRecord({
       id: existingRec.id,
       title: existingRec.title,
       moduleKey,
+      rubricKey,
       score,
       eventDate: new Date().toISOString().slice(0, 10),
-      note: existingRec.note || '',
+      note,
     });
   }
   closeAttendModal();
-  const modName = BUCT_MODULE_MAP[moduleKey]?.name || '二课';
+  const modName = BUCT_MODULE_MAP[moduleKey]?.shortName || '二课';
   showGlassToast(
     state.uiStyle === 'pixel' ? `🏆 悬赏交付！${modName} +${score}分` : `✓ 已记入 ${modName} +${score}分`,
     'success'
@@ -2750,28 +3275,115 @@ document.getElementById('amSaveBtn').addEventListener('click', async () => {
   haptic(18);
 });
 
-// 手动增加/修改二课成绩弹窗
+// 零打字点选补录 / 编辑二课成绩弹窗
 document.getElementById('mcClose').addEventListener('click', closeManualCreditModal);
 document.getElementById('mcCancelBtn').addEventListener('click', closeManualCreditModal);
 document.getElementById('manualCreditModal').addEventListener('click', (e) => {
   if (e.target.id === 'manualCreditModal') closeManualCreditModal();
 });
+document.getElementById('mcModPills').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-mc-mod]');
+  if (!btn) return;
+  state.mcSelectedMod = btn.dataset.mcMod;
+  const firstItem = getRubricItemsForModule(state.mcSelectedMod)[0];
+  state.mcSelectedRubric = firstItem?.key || 'moral_base_demo';
+  state.mcCollective = false;
+  state.mcCustomTouched = false;
+  const presets = getRubricOptionPresets(state.mcSelectedRubric);
+  const pick = presets.find((p) => p.score > 0) || presets[0] || { label: '', score: 0 };
+  state.mcSelectedScore = pick.score;
+  state.mcSelectedLabel = pick.label;
+  renderManualPickerState();
+  haptic(6);
+});
+document.getElementById('mcRubricSelect').addEventListener('change', (e) => {
+  state.mcSelectedRubric = e.target.value;
+  state.mcCollective = false;
+  state.mcCustomTouched = false;
+  const presets = getRubricOptionPresets(state.mcSelectedRubric);
+  const pick = presets.find((p) => p.score > 0) || presets[0] || { label: '', score: 0 };
+  state.mcSelectedScore = pick.score;
+  state.mcSelectedLabel = pick.label;
+  renderManualPickerState();
+});
+document.getElementById('mcOptionPills').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-mc-opt-score]');
+  if (!btn) return;
+  state.mcSelectedScore = Number(btn.dataset.mcOptScore) || 0;
+  state.mcSelectedLabel = btn.dataset.mcOptLabel || '';
+  state.mcCustomTouched = false;
+  renderManualPickerState();
+  haptic(8);
+});
+document.getElementById('mcCollectiveBtn').addEventListener('click', () => {
+  state.mcCollective = !state.mcCollective;
+  const presets = getRubricOptionPresets(state.mcSelectedRubric);
+  const curOpt = presets.find((p) => p.label === state.mcSelectedLabel) || presets.find((p) => p.score > 0);
+  if (curOpt) {
+    state.mcSelectedScore =
+      state.mcCollective && !curOpt.noHalf ? Math.round((curOpt.score / 2) * 10) / 10 : curOpt.score;
+  }
+  state.mcCustomTouched = false;
+  renderManualPickerState();
+  haptic(8);
+});
+['mcName', 'mcScore', 'mcNote'].forEach((id) => {
+  document.getElementById(id).addEventListener('input', () => {
+    state.mcCustomTouched = true;
+    const previewEl = document.getElementById('mcAutoPreview');
+    const scoreVal = Number(document.getElementById('mcScore').value) || 0;
+    const titleVal = document.getElementById('mcName').value.trim() || '自定义二课记录';
+    previewEl.innerHTML = `
+      <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">将记入：${escapeHtml(titleVal)}</span>
+      <span class="rec-score-pill ${scoreVal < 0 ? 'neg' : ''}">${scoreVal < 0 ? `${scoreVal}分` : `+${scoreVal}分`}</span>
+    `;
+  });
+});
 document.getElementById('manualCreditForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const wasEditing = Boolean(state.editingManualId);
-  const moduleKey = document.getElementById('mcModule').value;
-  const score = Number(document.getElementById('mcScore').value) || 0;
-  await saveManualRecord({
-    id: state.editingManualId,
-    title: document.getElementById('mcName').value.trim(),
-    moduleKey,
-    score,
-    eventDate: document.getElementById('mcDate').value,
-    note: document.getElementById('mcNote').value.trim(),
-  });
+  const moduleKey = state.mcSelectedMod || document.getElementById('mcModule').value;
+  const rubricKey = state.mcSelectedRubric || '';
+  const score = clampLocalScore(document.getElementById('mcScore').value);
+  const title = document.getElementById('mcName').value.trim() || BUCT_RUBRIC_MAP[rubricKey]?.title || '二课补录';
+  const eventDate = document.getElementById('mcDate').value;
+  const note = document.getElementById('mcNote').value.trim();
+
+  if (wasEditing) {
+    await saveManualRecord({
+      id: state.editingManualId,
+      title,
+      moduleKey,
+      rubricKey,
+      score,
+      eventDate,
+      note,
+    });
+  } else if (rubricKey && !state.mcCustomTouched) {
+    await saveRubricRecord({
+      rubricKey,
+      moduleKey,
+      title,
+      score,
+      eventDate,
+      note,
+    });
+  } else {
+    await saveManualRecord({
+      id: null,
+      title,
+      moduleKey,
+      rubricKey: state.mcCustomTouched ? '' : rubricKey,
+      score,
+      eventDate,
+      note,
+    });
+  }
+  state.expandedRubricMod = moduleKey;
   closeManualCreditModal();
-  const modName = BUCT_MODULE_MAP[moduleKey]?.name || '二课';
-  showGlassToast(wasEditing ? '✓ 已更新二课成绩' : `✓ 已补录 ${modName} +${score}分`, 'success');
+  const modName = BUCT_MODULE_MAP[moduleKey]?.shortName || '二课';
+  const scoreDisp = score < 0 ? `${score}分` : `+${score}分`;
+  showGlassToast(wasEditing ? '✓ 已更新二课成绩' : `✓ 已记入 ${modName} ${scoreDisp}`, score < 0 ? 'warn' : 'success');
   haptic(14);
 });
 
@@ -2825,20 +3437,33 @@ document.getElementById('scImportBtn').addEventListener('click', async () => {
       state.studentRecords = data.records || [];
     } else {
       for (const r of parsed.r) {
+        const rk = r.rubric_key || r.rubricKey || r.rk || '';
         if (r.activity_id != null) {
           await saveActivityRecord({
             activityId: r.activity_id,
             title: r.title,
             moduleKey: r.module_key,
+            rubricKey: rk,
             score: r.score,
             status: r.status,
             eventDate: r.event_date,
             note: r.note,
           });
+        } else if (rk && BUCT_RUBRIC_MAP[rk]) {
+          await saveRubricRecord({
+            rubricKey: rk,
+            moduleKey: r.module_key,
+            title: r.title,
+            score: r.score,
+            eventDate: r.event_date,
+            note: r.note,
+            silentRender: true,
+          });
         } else {
           await saveManualRecord({
             title: r.title,
             moduleKey: r.module_key,
+            rubricKey: rk,
             score: r.score,
             eventDate: r.event_date,
             note: r.note,
