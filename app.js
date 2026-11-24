@@ -1,7 +1,9 @@
 const CACHE_KEY = 'wah_public_snapshot_v2';
 const REMIND_KEY = 'wah_silent_reminders_v1';
 const SAVED_KEY = 'wah_saved_v1';
+const CLEARED_KEY = 'wah_cleared_v1';
 const VIEW_MODE_KEY = 'wah_view_mode_v1';
+const UI_STYLE_KEY = 'wah_ui_style_v1';
 const THEME_KEY = 'wah_theme';
 const HUB_PUBLIC_URL = 'https://tianxiadugu091-afk.github.io/buct-activities/';
 const IS_STATIC_HOST =
@@ -17,6 +19,7 @@ const state = {
   hideEnded: false,
   onlySaved: false,
   viewMode: 'grid', // 'grid' | 'deck'
+  uiStyle: document.documentElement.getAttribute('data-ui') === 'pixel' ? 'pixel' : 'minimal',
   deckIndex: 0,
   meta: null,
   allItems: [],
@@ -26,6 +29,7 @@ const state = {
   lastSyncedAt: null,
   reminders: {}, // { [activityId]: { atMs, title, url, fired } }
   savedIds: new Set(),
+  clearedIds: new Set(),
   editingRemindItem: null,
   activeDetailId: null,
   posterItem: null,
@@ -52,6 +56,57 @@ function persistSavedIds() {
   try {
     localStorage.setItem(SAVED_KEY, JSON.stringify([...state.savedIds]));
   } catch {}
+}
+
+function loadClearedIds() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(CLEARED_KEY) || '[]');
+    state.clearedIds = new Set(Array.isArray(arr) ? arr.map(Number).filter(Number.isFinite) : []);
+  } catch {
+    state.clearedIds = new Set();
+  }
+}
+
+function persistClearedIds() {
+  try {
+    localStorage.setItem(CLEARED_KEY, JSON.stringify([...state.clearedIds]));
+  } catch {}
+}
+
+function updateUiStyleUI() {
+  const isPixel = state.uiStyle === 'pixel';
+  document.documentElement.setAttribute('data-ui', state.uiStyle);
+  document.querySelectorAll('#uiStyleSwitch [data-ui-choice]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.uiChoice === state.uiStyle);
+  });
+  const mobBtn = document.getElementById('uiStyleMobileBtn');
+  if (mobBtn) {
+    mobBtn.textContent = isPixel ? '☁ 简约' : '⚔ 悬赏';
+    mobBtn.title = isPixel ? '切换到简约云端版' : '切换到像素悬赏任务板';
+  }
+  const radarBadgeText = document.getElementById('radarBadgeText');
+  if (radarBadgeText) {
+    radarBadgeText.textContent = isPixel ? '紧急悬赏' : '急抢雷达';
+  }
+  const posterTitle = document.getElementById('posterTitle');
+  if (posterTitle) {
+    posterTitle.textContent = isPixel ? '像素悬赏通缉令' : '活动分享卡片图';
+  }
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) {
+    searchInput.placeholder = isPixel ? '搜悬赏任务 / 发布公会…' : '搜活动 / 公众号…';
+  }
+}
+
+function setUiStyle(nextStyle) {
+  const normalized = nextStyle === 'pixel' ? 'pixel' : 'minimal';
+  state.uiStyle = normalized;
+  try {
+    localStorage.setItem(UI_STYLE_KEY, normalized);
+  } catch {}
+  updateUiStyleUI();
+  haptic(14);
+  renderFilteredLocal({ animate: true });
 }
 
 function loadViewMode() {
@@ -599,51 +654,128 @@ function getItemDisplayInfo(item) {
   };
 }
 
+function getQuestMeta(item, regSt, isUncertain) {
+  if (regSt.ended) return { code: 'END', label: '已归档', cls: 'rank-end', xp: 10 };
+  if (regSt.kind === 'urgent') return { code: 'S', label: 'S 级急赏', cls: 'rank-s', xp: 35 };
+  if (item.credit_hint && !isUncertain) return { code: 'A', label: 'A 级高赏', cls: 'rank-a', xp: 25 };
+  return { code: 'B', label: 'B 级委托', cls: 'rank-b', xp: 15 };
+}
+
+function renderQuestHud() {
+  const hud = document.getElementById('questHud');
+  if (!hud) return;
+
+  let openCount = 0;
+  let urgentCount = 0;
+  let acceptedCount = 0;
+  let totalXp = 0;
+  const itemById = new Map();
+
+  for (const item of state.allItems) {
+    itemById.set(item.id, item);
+    const st = getRegistrationStatus(item);
+    const isUnc = Boolean(item.is_uncertain) || (item.tags || []).some((t) => /存疑/.test(t.name));
+    if (!st.ended) openCount += 1;
+    if (isHotItem(st)) urgentCount += 1;
+    if (state.savedIds.has(item.id)) acceptedCount += 1;
+    if (state.clearedIds.has(item.id)) {
+      totalXp += getQuestMeta(item, st, isUnc).xp;
+    }
+  }
+  for (const cid of state.clearedIds) {
+    if (!itemById.has(cid)) totalXp += 20;
+  }
+
+  const clearedCount = state.clearedIds.size;
+  const level = Math.floor(totalXp / 100) + 1;
+  const xpInLevel = totalXp % 100;
+  const rankTitles = ['见习新生', '校园游侠', '二课猎手', '满绩勇者', '北化传奇'];
+  const rankTitle = rankTitles[Math.min(level - 1, rankTitles.length - 1)];
+
+  const setTxt = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(v);
+  };
+  setTxt('qsOpenCount', openCount);
+  setTxt('qsUrgentCount', urgentCount);
+  setTxt('qsAcceptedCount', acceptedCount);
+  setTxt('qsClearedCount', clearedCount);
+  setTxt('questRankBadge', `LV.${level} ${rankTitle}`);
+  setTxt('qbAcceptText', `${Math.min(acceptedCount, 10)} / 10`);
+  setTxt('qbXpText', `${xpInLevel} / 100 XP`);
+
+  const acceptCells = document.getElementById('qbAcceptCells');
+  if (acceptCells) {
+    const filled = Math.min(10, acceptedCount);
+    acceptCells.innerHTML = Array.from({ length: 10 }, (_, i) =>
+      `<span class="sc-questbar__cell ${i < filled ? 'is-gold' : ''}"></span>`
+    ).join('');
+  }
+  const xpCells = document.getElementById('qbXpCells');
+  if (xpCells) {
+    const filled = Math.min(10, Math.floor(xpInLevel / 10));
+    xpCells.innerHTML = Array.from({ length: 10 }, (_, i) =>
+      `<span class="sc-questbar__cell ${i < filled ? 'is-green' : ''}"></span>`
+    ).join('');
+  }
+}
+
 function renderCard(item, idx = 0, animate = false) {
   const info = getItemDisplayInfo(item);
   const { accent, regSt, isHot, isUncertain, isArmed, isSaved, audText, audClass, tagsHtml, regDisplay, pubDisplay, creditText, jumpUrl } = info;
+  const isPixel = state.uiStyle === 'pixel';
+  const isCleared = state.clearedIds.has(item.id);
+  const qMeta = getQuestMeta(item, regSt, isUncertain);
   const linkHtml = jumpUrl
-    ? `<a class="act-link" href="${escapeHtml(jumpUrl)}" target="_blank" rel="noopener noreferrer">原推文 ↗</a>`
+    ? `<a class="act-link" href="${escapeHtml(jumpUrl)}" target="_blank" rel="noopener noreferrer">${
+        isPixel ? '接委托 ↗' : '原推文 ↗'
+      }</a>`
     : '';
   const enterClass = animate ? 'card-enter' : '';
   const staggerStyle = animate ? `--i:${Math.min(idx, 10)};` : '';
 
   return `
-    <article class="act-card ${regSt.ended ? 'is-ended' : ''} ${isUncertain ? 'is-uncertain' : ''} ${isHot ? 'is-hot' : ''} ${enterClass}" data-card-id="${item.id}" style="${staggerStyle}--accent:${accent}">
+    <article class="act-card ${regSt.ended ? 'is-ended' : ''} ${isUncertain ? 'is-uncertain' : ''} ${isHot ? 'is-hot' : ''} ${
+      isCleared ? 'is-cleared' : ''
+    } ${enterClass}" data-card-id="${item.id}" style="${staggerStyle}--accent:${accent}">
       <div class="act-body">
         <div class="act-top">
-          <div class="act-tags">${tagsHtml}</div>
+          <div class="act-tags">
+            <span class="quest-rank-tag ${qMeta.cls}">${escapeHtml(qMeta.label)}</span>
+            ${isCleared ? '<span class="quest-cleared-badge">✓ 已领赏</span>' : ''}
+            ${tagsHtml}
+          </div>
           <span class="reg-pill ${regSt.kind}" data-reg-pill="${item.id}">${escapeHtml(regSt.label)}</span>
         </div>
 
         <h2 class="act-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h2>
 
         <div class="audience-row">
-          <span class="audience-badge ${audClass}">👥 ${escapeHtml(audText)}</span>
+          <span class="audience-badge ${audClass}">${isPixel ? '🛡' : '👥'} ${escapeHtml(audText)}</span>
         </div>
 
         ${
           creditText
-            ? `<div class="act-credit ${isUncertain ? 'uncertain' : ''}">${isUncertain ? '⚠️ ' : '✦ '}${escapeHtml(
-                creditText
-              )}</div>`
+            ? `<div class="act-credit ${isUncertain ? 'uncertain' : ''}">${
+                isUncertain ? '⚠️ ' : isPixel ? '🪙 ' : '✦ '
+              }${escapeHtml(creditText)}</div>`
             : ''
         }
 
         <div class="time-box">
           <div class="time-row">
-            <span class="time-key">报名</span>
+            <span class="time-key">${isPixel ? '期限' : '报名'}</span>
             <span class="time-val ${item.reg_time_text || item.reg_start_at || item.reg_end_at ? 'reg-highlight' : 'muted'}">${escapeHtml(
               regDisplay
             )}</span>
           </div>
           <div class="time-row time-row-secondary">
-            <span class="time-key">发布时间</span>
+            <span class="time-key">${isPixel ? '贴榜时间' : '发布时间'}</span>
             <span class="time-val muted">${escapeHtml(pubDisplay)}</span>
           </div>
           ${
             item.event_time
-              ? `<div class="time-row time-row-secondary"><span class="time-key">活动时间</span><span class="time-val muted">${escapeHtml(
+              ? `<div class="time-row time-row-secondary"><span class="time-key">${isPixel ? '行动时间' : '活动时间'}</span><span class="time-val muted">${escapeHtml(
                   item.event_time
                 )}</span></div>`
               : ''
@@ -662,13 +794,13 @@ function renderCard(item, idx = 0, animate = false) {
         </div>
         <div class="card-mobile-actions">
           <button type="button" class="card-mobile-star ${isSaved ? 'saved' : ''}" data-star-id="${item.id}" aria-label="${
-            isSaved ? '取消收藏' : '收藏到待抢清单'
+            isSaved ? (isPixel ? '放弃悬赏' : '取消收藏') : isPixel ? '接取悬赏' : '收藏到待抢清单'
           }">${isSaved ? '★' : '☆'}</button>
-          <span class="card-mobile-cue ${isArmed ? 'armed' : ''}">${isArmed ? '🔔' : '详情 ›'}</span>
+          <span class="card-mobile-cue ${isArmed ? 'armed' : ''}">${isArmed ? '🔔' : isPixel ? '接取 ›' : '详情 ›'}</span>
         </div>
         <div class="foot-actions">
           <button type="button" class="star-btn ${isSaved ? 'saved' : ''}" data-star-id="${item.id}" title="${
-            isSaved ? '移出待抢清单' : '加入待抢清单'
+            isSaved ? (isPixel ? '从任务栏移出' : '移出待抢清单') : isPixel ? '接取悬赏到任务栏' : '加入待抢清单'
           }">${isSaved ? '★' : '☆'}</button>
           <button type="button" class="remind-btn ${isArmed ? 'armed' : ''}" data-remind-id="${item.id}" title="设置静音振动提醒（上课不响铃）">
             ${isArmed ? '✓ 已提醒' : '🔔 提醒'}
@@ -683,42 +815,49 @@ function renderCard(item, idx = 0, animate = false) {
 function renderDeckCard(item, idx, activeIdx) {
   const info = getItemDisplayInfo(item);
   const { accent, regSt, isHot, isUncertain, isArmed, isSaved, audText, audClass, tagsHtml, regDisplay, pubDisplay, creditText, jumpUrl } = info;
+  const isPixel = state.uiStyle === 'pixel';
+  const isCleared = state.clearedIds.has(item.id);
+  const qMeta = getQuestMeta(item, regSt, isUncertain);
   return `
     <article class="deck-card ${isHot ? 'is-hot' : ''} ${idx === activeIdx ? 'is-active' : ''}" data-deck-index="${idx}" data-card-id="${item.id}" style="--accent:${accent}">
       <div class="deck-hero">
         <div class="deck-hero-top">
-          <div class="act-tags">${tagsHtml}</div>
+          <div class="act-tags">
+            <span class="quest-rank-tag ${qMeta.cls}">${escapeHtml(qMeta.label)}</span>
+            ${isCleared ? '<span class="quest-cleared-badge">✓ 已领赏</span>' : ''}
+            ${tagsHtml}
+          </div>
           <span class="reg-pill ${regSt.kind}" data-reg-pill="${item.id}">${escapeHtml(regSt.label)}</span>
         </div>
         <h2 class="deck-title">${escapeHtml(item.title)}</h2>
       </div>
       <div class="deck-body">
         <div class="audience-row">
-          <span class="audience-badge ${audClass}">👥 面向人群：${escapeHtml(audText)}</span>
+          <span class="audience-badge ${audClass}">${isPixel ? '🛡 招募条件：' : '👥 面向人群：'}${escapeHtml(audText)}</span>
         </div>
         ${
           creditText
             ? `<div class="ds-credit-card ${isUncertain ? 'uncertain' : ''}">${
-                isUncertain ? '⚠️ ' : '✦ '
+                isUncertain ? '⚠️ ' : isPixel ? '🪙 悬赏奖励：' : '✦ '
               }${escapeHtml(creditText)}</div>`
             : ''
         }
         <div class="ds-time-card">
           <div class="time-row">
-            <span class="time-key">报名时间</span>
+            <span class="time-key">${isPixel ? '委托期限' : '报名时间'}</span>
             <span class="time-val ${item.reg_time_text || item.reg_start_at || item.reg_end_at ? 'reg-highlight' : 'muted'}">${escapeHtml(
               regDisplay
             )}</span>
           </div>
           ${
             item.event_time
-              ? `<div class="time-row"><span class="time-key">活动时间</span><span class="time-val">${escapeHtml(
+              ? `<div class="time-row"><span class="time-key">${isPixel ? '行动时间' : '活动时间'}</span><span class="time-val">${escapeHtml(
                   item.event_time
                 )}</span></div>`
               : ''
           }
           <div class="time-row">
-            <span class="time-key">发布时间</span>
+            <span class="time-key">${isPixel ? '贴榜时间' : '发布时间'}</span>
             <span class="time-val muted">${escapeHtml(pubDisplay)}</span>
           </div>
         </div>
@@ -730,17 +869,23 @@ function renderDeckCard(item, idx, activeIdx) {
         </div>
       </div>
       <div class="deck-foot">
-        <button type="button" class="deck-act-btn ${isSaved ? 'saved' : ''}" data-star-id="${item.id}" title="收藏待抢">${
-          isSaved ? '★' : '☆'
-        }</button>
+        <button type="button" class="deck-act-btn ${isSaved ? 'saved' : ''}" data-star-id="${item.id}" title="${
+          isPixel ? '接取悬赏' : '收藏待抢'
+        }">${isSaved ? '★' : '☆'}</button>
         <button type="button" class="deck-act-btn ${isArmed ? 'armed' : ''}" data-remind-id="${item.id}" title="静音提醒">${
           isArmed ? '✓' : '🔔'
         }</button>
-        <button type="button" class="deck-act-btn" data-poster-id="${item.id}" title="生成分享海报图">🖼</button>
+        <button type="button" class="deck-act-btn" data-poster-id="${item.id}" title="${
+          isPixel ? '生成悬赏通缉令' : '生成分享海报图'
+        }">🖼</button>
         ${
           jumpUrl
-            ? `<a class="deck-act-btn primary" href="${escapeHtml(jumpUrl)}" target="_blank" rel="noopener noreferrer">原推文 ↗</a>`
-            : `<button type="button" class="deck-act-btn primary" data-open-detail-id="${item.id}">看详情</button>`
+            ? `<a class="deck-act-btn primary" href="${escapeHtml(jumpUrl)}" target="_blank" rel="noopener noreferrer">${
+                isPixel ? '接取委托 ↗' : '原推文 ↗'
+              }</a>`
+            : `<button type="button" class="deck-act-btn primary" data-open-detail-id="${item.id}">${
+                isPixel ? '展开卷轴' : '看详情'
+              }</button>`
         }
       </div>
     </article>
@@ -795,10 +940,17 @@ function updateFavDockUI() {
     dock.classList.add('hidden');
     return;
   }
+  const isPixel = state.uiStyle === 'pixel';
   dock.classList.remove('hidden');
   countEl.textContent = String(validCount);
   toggleBtn.classList.toggle('active', state.onlySaved);
-  textEl.textContent = state.onlySaved ? '仅看已收藏' : '待抢清单';
+  textEl.textContent = state.onlySaved
+    ? isPixel
+      ? '仅看已接悬赏'
+      : '仅看已收藏'
+    : isPixel
+    ? '任务背包'
+    : '待抢清单';
   allBtn.classList.toggle('hidden', !state.onlySaved);
 }
 
@@ -886,11 +1038,17 @@ function renderFilteredLocal(opts = {}) {
   state.renderedItems = items;
 
   syncFilterControlsUI(items.length);
+  renderQuestHud();
   renderRadarBar();
   updateFavDockUI();
 
+  const isPixel = state.uiStyle === 'pixel';
   const emptyMsg = state.onlySaved
-    ? '待抢清单暂时为空，点击卡片上的 ☆ 即可收藏'
+    ? isPixel
+      ? '任务背包还是空的，点卡片上的 ☆ 即可接取悬赏'
+      : '待抢清单暂时为空，点击卡片上的 ☆ 即可收藏'
+    : isPixel
+    ? '当前告示板暂无匹配的悬赏委托'
     : '暂无符合条件的活动';
 
   if (state.viewMode === 'deck') {
@@ -1238,9 +1396,15 @@ function renderDetailSheetContent(item) {
   const creditText =
     item.credit_hint || (isUncertain ? '二课类别存疑 · 可自行联系主办方询问' : '');
   const jumpUrl = safeHref(item.source_article_url);
+  const isPixel = state.uiStyle === 'pixel';
+  const isSaved = state.savedIds.has(item.id);
+  const isCleared = state.clearedIds.has(item.id);
+  const qMeta = getQuestMeta(item, regSt, isUncertain);
 
-  document.getElementById('dsAccentBar').style.background = accent;
+  document.getElementById('dsAccentBar').style.background = isPixel ? '#1c1c1c' : accent;
   document.getElementById('dsHeadMeta').innerHTML = `
+    <span class="quest-rank-tag ${qMeta.cls}">${escapeHtml(qMeta.label)}</span>
+    ${isCleared ? '<span class="quest-cleared-badge">✓ 已领赏</span>' : ''}
     ${tagsHtml}
     <span class="reg-pill ${regSt.kind}" data-reg-pill="${item.id}">${escapeHtml(regSt.label)}</span>
   `;
@@ -1248,38 +1412,38 @@ function renderDetailSheetContent(item) {
   document.getElementById('dsBody').innerHTML = `
     <h2 class="ds-title" id="dsTitle">${escapeHtml(item.title)}</h2>
     <div class="ds-badges">
-      <span class="audience-badge ${audClass}">👥 面向人群：${escapeHtml(audText)}</span>
+      <span class="audience-badge ${audClass}">${isPixel ? '🛡 招募条件：' : '👥 面向人群：'}${escapeHtml(audText)}</span>
     </div>
     ${
       creditText
         ? `<div class="ds-credit-card ${isUncertain ? 'uncertain' : ''}">${
-            isUncertain ? '⚠️ ' : '✦ 二课说明：'
+            isUncertain ? '⚠️ ' : isPixel ? '🪙 悬赏奖励：' : '✦ 二课说明：'
           }${escapeHtml(creditText)}</div>`
         : ''
     }
     <div class="ds-time-card">
       <div class="time-row">
-        <span class="time-key">报名时间</span>
+        <span class="time-key">${isPixel ? '委托期限' : '报名时间'}</span>
         <span class="time-val ${item.reg_time_text || item.reg_start_at || item.reg_end_at ? 'reg-highlight' : 'muted'}">${escapeHtml(
           regDisplay
         )}</span>
       </div>
       ${
         item.event_time
-          ? `<div class="time-row"><span class="time-key">活动时间</span><span class="time-val">${escapeHtml(
+          ? `<div class="time-row"><span class="time-key">${isPixel ? '行动时间' : '活动时间'}</span><span class="time-val">${escapeHtml(
               item.event_time
             )}</span></div>`
           : ''
       }
       ${
         item.location
-          ? `<div class="time-row"><span class="time-key">活动地点</span><span class="time-val muted">${escapeHtml(
+          ? `<div class="time-row"><span class="time-key">${isPixel ? '委托地点' : '活动地点'}</span><span class="time-val muted">${escapeHtml(
               item.location
             )}</span></div>`
           : ''
       }
       <div class="time-row">
-        <span class="time-key">发布时间</span>
+        <span class="time-key">${isPixel ? '贴榜时间' : '发布时间'}</span>
         <span class="time-val muted">${escapeHtml(pubDisplay)}</span>
       </div>
     </div>
@@ -1288,16 +1452,31 @@ function renderDetailSheetContent(item) {
         item.source_account_name
       )}">${escapeHtml(avatarChar(item.source_account_name))}</div>
       <div class="ds-source-info">
-        <div class="ds-source-name">${escapeHtml(item.source_account_name)}</div>
+        <div class="ds-source-name">${isPixel ? '发布公会：' : ''}${escapeHtml(item.source_account_name)}</div>
         <div class="ds-source-article">原推文：《${escapeHtml(item.source_article_title || item.title)}》</div>
       </div>
     </div>
     <div class="ds-quick-tools">
-      <button type="button" class="ds-tool-chip ${state.savedIds.has(item.id) ? 'saved' : ''}" data-star-id="${item.id}">
-        ${state.savedIds.has(item.id) ? '★ 已在待抢清单' : '☆ 收藏到待抢'}
+      <button type="button" class="ds-tool-chip ${isSaved ? 'saved' : ''}" data-star-id="${item.id}">
+        ${
+          isPixel
+            ? isSaved
+              ? '★ 已接悬赏'
+              : '⚔ 接取悬赏'
+            : isSaved
+            ? '★ 已在待抢清单'
+            : '☆ 收藏到待抢'
+        }
       </button>
+      ${
+        isPixel
+          ? `<button type="button" class="ds-tool-chip ${isCleared ? 'cleared' : ''}" data-clear-id="${item.id}">
+              ${isCleared ? '✓ 已领赏' : `🏆 完成 +${qMeta.xp}XP`}
+            </button>`
+          : ''
+      }
       <button type="button" class="ds-tool-chip" data-poster-id="${item.id}">
-        🖼 生成分享海报
+        ${isPixel ? '📜 悬赏令图' : '🖼 生成分享海报'}
       </button>
     </div>
   `;
@@ -1308,9 +1487,11 @@ function renderDetailSheetContent(item) {
     </button>
     ${
       jumpUrl
-        ? `<a class="sheet-btn sheet-btn-primary" style="background:${accent}" href="${escapeHtml(
-            jumpUrl
-          )}" target="_blank" rel="noopener noreferrer">阅读原推文 ↗</a>`
+        ? `<a class="sheet-btn sheet-btn-primary" ${
+            isPixel ? '' : `style="background:${accent}"`
+          } href="${escapeHtml(jumpUrl)}" target="_blank" rel="noopener noreferrer">${
+            isPixel ? '📜 前往委托原贴 ↗' : '阅读原推文 ↗'
+          }</a>`
         : ''
     }
   `;
@@ -1588,7 +1769,226 @@ function wrapCanvasText(ctx, text, maxWidth, maxLines) {
   return lines;
 }
 
+function drawQrOnCanvas(ctx, qrMat, qrX, qrY, qrBoxSize, darkColor = '#0f172a') {
+  if (!qrMat) return;
+  const N = qrMat.length;
+  const cell = qrBoxSize / N;
+  ctx.fillStyle = darkColor;
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (qrMat[r][c]) {
+        ctx.fillRect(
+          Math.floor(qrX + c * cell),
+          Math.floor(qrY + r * cell),
+          Math.ceil(cell),
+          Math.ceil(cell)
+        );
+      }
+    }
+  }
+}
+
+function generatePixelBountyPoster(item) {
+  const info = getItemDisplayInfo(item);
+  const { regSt, isUncertain, audText, regDisplay, creditText, jumpUrl } = info;
+  const qMeta = getQuestMeta(item, regSt, isUncertain);
+  const tagName = (item.tags || [])[0]?.name || '二课委托';
+  const W = 750;
+  const H = 1080;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const FONT = '"PingFang SC", "Microsoft YaHei", sans-serif';
+
+  // Parchment background + 16px pixel grid
+  ctx.fillStyle = '#f4e9c8';
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(109, 85, 38, 0.12)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= W; x += 24) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= H; y += 24) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+
+  // Hard offset shadow + Vellum scroll card
+  ctx.fillStyle = '#1c1c1c';
+  ctx.fillRect(46, 46, W - 76, H - 76);
+  ctx.fillStyle = '#fbf5dd';
+  ctx.fillRect(34, 34, W - 76, H - 76);
+  ctx.strokeStyle = '#1c1c1c';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(34, 34, W - 76, H - 76);
+
+  // Dark Guild Header Banner
+  ctx.fillStyle = '#1c1c1c';
+  ctx.fillRect(54, 54, W - 116, 94);
+  ctx.fillStyle = '#f0a232';
+  ctx.fillRect(54, 142, W - 116, 6);
+
+  ctx.font = `800 30px "Pixelify Sans", ${FONT}`;
+  ctx.fillStyle = '#fbf5dd';
+  ctx.fillText('⚔  WANTED · 北化二课悬赏令', 78, 108);
+  ctx.font = `700 18px "Silkscreen", monospace`;
+  ctx.fillStyle = '#ffd27a';
+  ctx.fillText(`BUCT QUEST BOARD // +${qMeta.xp} XP`, 78, 134);
+
+  // Rotated OVERWORLD Rank Stamp + Status Tag
+  ctx.save();
+  ctx.translate(78, 180);
+  ctx.rotate(-0.03);
+  const stampBg = qMeta.cls === 'rank-s' ? '#e2522e' : qMeta.cls === 'rank-a' ? '#f0a232' : '#2e5dd6';
+  const stampFg = qMeta.cls === 'rank-a' ? '#1c1c1c' : '#ffffff';
+  ctx.fillStyle = '#1c1c1c';
+  ctx.fillRect(5, 5, 194, 48);
+  ctx.fillStyle = stampBg;
+  ctx.fillRect(0, 0, 194, 48);
+  ctx.strokeStyle = '#1c1c1c';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(0, 0, 194, 48);
+  ctx.font = `800 24px ${FONT}`;
+  ctx.fillStyle = stampFg;
+  ctx.fillText(`★ ${qMeta.label}`, 20, 33);
+  ctx.restore();
+
+  // Category & Status rectangular chips
+  ctx.font = `700 22px ${FONT}`;
+  const catW = ctx.measureText(tagName).width + 32;
+  ctx.fillStyle = '#ead8a3';
+  ctx.fillRect(298, 180, catW, 44);
+  ctx.strokeStyle = '#1c1c1c';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(298, 180, catW, 44);
+  ctx.fillStyle = '#1c1c1c';
+  ctx.fillText(tagName, 314, 210);
+
+  const stText = regSt.label || '招募中';
+  const stW = Math.min(ctx.measureText(stText).width + 30, 210);
+  ctx.fillStyle = regSt.kind === 'urgent' ? '#e2522e' : '#2fa84f';
+  ctx.fillRect(W - 64 - stW, 180, stW, 44);
+  ctx.strokeRect(W - 64 - stW, 180, stW, 44);
+  ctx.fillStyle = '#ffffff';
+  const clippedSt = wrapCanvasText(ctx, stText, stW - 18, 1)[0] || stText;
+  ctx.fillText(clippedSt, W - 64 - stW + 14, 210);
+
+  // Title
+  let y = 290;
+  ctx.font = `800 40px ${FONT}`;
+  ctx.fillStyle = '#1c1c1c';
+  const titleLines = wrapCanvasText(ctx, item.title, W - 148, 3);
+  for (const line of titleLines) {
+    ctx.fillText(line, 74, y);
+    y += 56;
+  }
+
+  // Stitched dashed divider
+  ctx.strokeStyle = '#6d5526';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 8]);
+  ctx.beginPath();
+  ctx.moveTo(74, y + 4);
+  ctx.lineTo(W - 74, y + 4);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  y += 30;
+
+  // Bounty Reward Box (Coin Gold tinted)
+  const rewardLine = creditText || '详见原委托推文说明';
+  ctx.font = `700 25px ${FONT}`;
+  const rwLines = wrapCanvasText(ctx, `🪙 悬赏奖励：${rewardLine}`, W - 184, 2);
+  const rwH = rwLines.length * 36 + 28;
+  ctx.fillStyle = '#f6df9d';
+  ctx.fillRect(74, y, W - 148, rwH);
+  ctx.strokeStyle = '#1c1c1c';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(74, y, W - 148, rwH);
+  ctx.fillStyle = '#1c1c1c';
+  let ry0 = y + 38;
+  for (const rl of rwLines) {
+    ctx.fillText(rl, 94, ry0);
+    ry0 += 36;
+  }
+  y += rwH + 20;
+
+  // Sunken Parchment Quest Details Well
+  const rows = [
+    { k: '🛡 招募条件', v: audText, hi: false },
+    { k: '⏱ 委托期限', v: regDisplay, hi: true },
+    ...(item.event_time ? [{ k: '⚔ 行动时间', v: item.event_time, hi: false }] : []),
+    { k: '🏰 发布公会', v: item.source_account_name || '校内公会', hi: false },
+  ];
+  const boxH = rows.length * 54 + 26;
+  ctx.fillStyle = '#ead8a3';
+  ctx.fillRect(74, y, W - 148, boxH);
+  ctx.strokeStyle = '#1c1c1c';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(74, y, W - 148, boxH);
+
+  let ry = y + 48;
+  for (const row of rows) {
+    ctx.font = `700 23px ${FONT}`;
+    ctx.fillStyle = '#6d5526';
+    ctx.fillText(row.k, 94, ry);
+    ctx.fillStyle = row.hi ? '#2e5dd6' : '#1c1c1c';
+    const vStr = wrapCanvasText(ctx, row.v, W - 360, 1)[0] || row.v;
+    const vw = ctx.measureText(vStr).width;
+    ctx.fillText(vStr, W - 94 - vw, ry);
+    ry += 54;
+  }
+
+  // Footer QR Stamp
+  const footY = H - 252;
+  ctx.strokeStyle = '#6d5526';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 8]);
+  ctx.beginPath();
+  ctx.moveTo(74, footY);
+  ctx.lineTo(W - 74, footY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const qrTarget = jumpUrl && new TextEncoder().encode(jumpUrl).length <= 134 ? jumpUrl : HUB_PUBLIC_URL;
+  const qrMat = makeQrMatrix(qrTarget) || makeQrMatrix(HUB_PUBLIC_URL);
+  const qrBoxSize = 152;
+  const qrX = W - 74 - qrBoxSize;
+  const qrY = footY + 24;
+
+  ctx.fillStyle = '#1c1c1c';
+  ctx.fillRect(qrX - 4, qrY - 4, qrBoxSize + 18, qrBoxSize + 18);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(qrX - 10, qrY - 10, qrBoxSize + 20, qrBoxSize + 20);
+  ctx.strokeStyle = '#1c1c1c';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(qrX - 10, qrY - 10, qrBoxSize + 20, qrBoxSize + 20);
+  drawQrOnCanvas(ctx, qrMat, qrX, qrY, qrBoxSize, '#1c1c1c');
+
+  ctx.font = `800 30px ${FONT}`;
+  ctx.fillStyle = '#1c1c1c';
+  ctx.fillText(qrTarget === jumpUrl ? '扫码接取此悬赏' : '扫码进入悬赏告示板', 74, footY + 74);
+
+  ctx.font = `600 22px ${FONT}`;
+  ctx.fillStyle = '#6d5526';
+  ctx.fillText('长按识别二维码 · 直达二课委托原贴', 74, footY + 116);
+
+  ctx.font = `700 20px "VT323", monospace`;
+  ctx.fillStyle = '#2fa84f';
+  ctx.fillText('[ PRESS START ] BUCT-ACTIVITIES QUEST BOARD', 74, footY + 158);
+
+  return canvas.toDataURL('image/png');
+}
+
 function generatePosterDataUrl(item) {
+  if (state.uiStyle === 'pixel') {
+    return generatePixelBountyPoster(item);
+  }
   const info = getItemDisplayInfo(item);
   const { accent, regSt, audText, regDisplay, creditText, jumpUrl } = info;
   const tagName = (item.tags || [])[0]?.name || '二课活动';
@@ -1599,52 +1999,55 @@ function generatePosterDataUrl(item) {
   canvas.height = H;
   const ctx = canvas.getContext('2d');
 
-  // Background gradient
-  const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-  bgGrad.addColorStop(0, '#0f172a');
-  bgGrad.addColorStop(0.42, '#111c36');
-  bgGrad.addColorStop(1, '#090e1c');
-  ctx.fillStyle = bgGrad;
+  // Halcyon / Fairweather light aurora & dot-grid background
+  ctx.fillStyle = '#f2f2f1';
   ctx.fillRect(0, 0, W, H);
+  const a1 = ctx.createRadialGradient(120, 120, 10, 120, 120, 360);
+  a1.addColorStop(0, 'rgba(255, 213, 189, 0.72)');
+  a1.addColorStop(1, 'rgba(255, 213, 189, 0)');
+  ctx.fillStyle = a1;
+  ctx.fillRect(0, 0, W, 560);
 
-  // Atmospheric accent orbs
-  const orb1 = ctx.createRadialGradient(130, 110, 20, 130, 110, 340);
-  orb1.addColorStop(0, accent + '66');
-  orb1.addColorStop(1, accent + '00');
-  ctx.fillStyle = orb1;
-  ctx.fillRect(0, 0, W, 500);
+  const a2 = ctx.createRadialGradient(410, 80, 10, 410, 80, 340);
+  a2.addColorStop(0, 'rgba(193, 147, 245, 0.48)');
+  a2.addColorStop(1, 'rgba(193, 147, 245, 0)');
+  ctx.fillStyle = a2;
+  ctx.fillRect(0, 0, W, 560);
 
-  const orb2 = ctx.createRadialGradient(640, 240, 10, 640, 240, 280);
-  orb2.addColorStop(0, '#38bdf844');
-  orb2.addColorStop(1, '#38bdf800');
-  ctx.fillStyle = orb2;
-  ctx.fillRect(250, 0, 500, 520);
+  const a3 = ctx.createRadialGradient(660, 140, 10, 660, 140, 320);
+  a3.addColorStop(0, 'rgba(159, 223, 251, 0.62)');
+  a3.addColorStop(1, 'rgba(159, 223, 251, 0)');
+  ctx.fillStyle = a3;
+  ctx.fillRect(0, 0, W, 560);
 
-  // Header brand & status pill
-  ctx.font = '700 24px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  // Header brand & status pill (Cirrus ink pill)
+  ctx.font = '700 24px "Inter Tight", "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.fillStyle = '#0e1116';
   ctx.fillText('✦ 北化二课活动 · 实时汇', 48, 76);
 
-  ctx.font = '700 22px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.font = '700 22px "Inter", "PingFang SC", "Microsoft YaHei", sans-serif';
   const statusText = regSt.label || '查看详情';
   const stW = ctx.measureText(statusText).width + 34;
   drawRoundedRect(ctx, W - 48 - stW, 46, stW, 42, 21);
-  ctx.fillStyle = regSt.kind === 'urgent' ? 'rgba(239,68,68,0.28)' : 'rgba(255,255,255,0.14)';
+  ctx.fillStyle = regSt.kind === 'urgent' ? '#c5197c' : '#0e1116';
   ctx.fill();
   ctx.fillStyle = '#ffffff';
   ctx.fillText(statusText, W - 48 - stW + 17, 74);
 
-  // Main glass card container
+  // Main pure-white Cirrus floating card
   drawRoundedRect(ctx, 36, 116, W - 72, H - 156, 30);
   ctx.fillStyle = '#ffffff';
   ctx.fill();
+  ctx.strokeStyle = 'rgba(23, 23, 23, 0.09)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
 
-  // Top color ribbon inside card
+  // Top subtle accent bar
   ctx.save();
   drawRoundedRect(ctx, 36, 116, W - 72, H - 156, 30);
   ctx.clip();
   ctx.fillStyle = accent;
-  ctx.fillRect(36, 116, W - 72, 12);
+  ctx.fillRect(36, 116, W - 72, 8);
   ctx.restore();
 
   let y = 178;
@@ -1722,7 +2125,7 @@ function generatePosterDataUrl(item) {
     ctx.font = row.hi
       ? '700 25px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif'
       : '600 24px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
-    ctx.fillStyle = row.hi ? accent : '#0f172a';
+    ctx.fillStyle = row.hi ? '#2e7def' : '#0f172a';
     const valLine = wrapCanvasText(ctx, row.v, W - 340, 1)[0] || row.v;
     const vw = ctx.measureText(valLine).width;
     ctx.fillText(valLine, W - 98 - vw, ry);
@@ -1752,24 +2155,7 @@ function generatePosterDataUrl(item) {
   ctx.strokeStyle = '#e2e8f0';
   ctx.lineWidth = 2;
   ctx.stroke();
-
-  if (qrMat) {
-    const N = qrMat.length;
-    const cell = qrBoxSize / N;
-    ctx.fillStyle = '#0f172a';
-    for (let r = 0; r < N; r++) {
-      for (let c = 0; c < N; c++) {
-        if (qrMat[r][c]) {
-          ctx.fillRect(
-            Math.floor(qrX + c * cell),
-            Math.floor(qrY + r * cell),
-            Math.ceil(cell),
-            Math.ceil(cell)
-          );
-        }
-      }
-    }
-  }
+  drawQrOnCanvas(ctx, qrMat, qrX, qrY, qrBoxSize, '#0f172a');
 
   ctx.font = '800 28px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
   ctx.fillStyle = '#0f172a';
@@ -1817,6 +2203,17 @@ function toggleSavedItem(id, triggerBtn) {
   renderFilteredLocal();
 }
 
+function toggleClearedItem(id) {
+  if (state.clearedIds.has(id)) {
+    state.clearedIds.delete(id);
+  } else {
+    state.clearedIds.add(id);
+  }
+  persistClearedIds();
+  haptic(16);
+  renderFilteredLocal();
+}
+
 function openDetailSheet(item) {
   state.activeDetailId = item.id;
   renderDetailSheetContent(item);
@@ -1828,6 +2225,26 @@ function openDetailSheet(item) {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
+document.getElementById('uiStyleSwitch').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-ui-choice]');
+  if (!btn) return;
+  setUiStyle(btn.dataset.uiChoice);
+});
+
+document.getElementById('uiStyleMobileBtn').addEventListener('click', () => {
+  setUiStyle(state.uiStyle === 'pixel' ? 'minimal' : 'pixel');
+});
+
+const qsAcceptedTile = document.getElementById('qsAcceptedTile');
+if (qsAcceptedTile) {
+  qsAcceptedTile.addEventListener('click', () => {
+    state.onlySaved = !state.onlySaved;
+    state.deckIndex = 0;
+    haptic(10);
+    renderFilteredLocal({ animate: true });
   });
 }
 
@@ -2057,6 +2474,11 @@ function handleCardActionClick(e) {
     toggleSavedItem(Number(starBtn.dataset.starId), starBtn);
     return true;
   }
+  const clearBtn = e.target.closest('[data-clear-id]');
+  if (clearBtn) {
+    toggleClearedItem(Number(clearBtn.dataset.clearId));
+    return true;
+  }
   const posterBtn = e.target.closest('[data-poster-id]');
   if (posterBtn) {
     const item = state.allItems.find((a) => a.id === Number(posterBtn.dataset.posterId));
@@ -2114,7 +2536,9 @@ backTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smo
 /* ==================== 启动与定时器 ==================== */
 loadReminders();
 loadSavedIds();
+loadClearedIds();
 loadViewMode();
+updateUiStyleUI();
 updateViewModeButtonUI();
 syncFilterControlsUI();
 const initialCached = loadSnapshotFromCache();
