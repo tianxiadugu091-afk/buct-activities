@@ -47,13 +47,121 @@ const state = {
   pendingAttendActivity: null, // activity item or record being confirmed
   editingManualId: null,
   afterLoginAction: null, // callback executed seamlessly after user registers/logs in
+  prevModScores: {},
 };
 
-/* ==================== 基础工具 ==================== */
+/* ==================== 基础工具 & 动效引擎（Liquid Glass + Spring Physics） ==================== */
 function haptic(ms = 10) {
   try {
     if (navigator.vibrate) navigator.vibrate(ms);
   } catch {}
+}
+
+let glassToastTimer = null;
+function showGlassToast(message, tone = 'default', duration = 2200) {
+  const el = document.getElementById('glassToast');
+  if (!el || !message) return;
+  clearTimeout(glassToastTimer);
+  el.textContent = String(message);
+  el.className = 'glass-toast' + (tone === 'success' || tone === 'warn' ? ` tone-${tone}` : '');
+  // Force reflow so rapid consecutive toasts replay spring entry cleanly
+  void el.offsetWidth;
+  el.classList.add('show');
+  glassToastTimer = setTimeout(() => {
+    el.classList.remove('show');
+  }, duration);
+}
+
+function syncLiquidTrack(trackId, activeSelector, instant = false) {
+  const track = document.getElementById(trackId);
+  if (!track) return;
+  const pill = track.querySelector(':scope > .liquid-pill-bg');
+  const activeEl = track.querySelector(activeSelector);
+  if (!pill || !activeEl) return;
+
+  const w = activeEl.offsetWidth;
+  const h = activeEl.offsetHeight;
+  if (w <= 0 || h <= 0) return;
+
+  const x = activeEl.offsetLeft;
+  const y = activeEl.offsetTop;
+  track.classList.add('has-indicator');
+
+  const alreadyReady = pill.classList.contains('ready');
+  if (instant || !alreadyReady) {
+    pill.classList.add('no-anim');
+    pill.style.top = `${y}px`;
+    pill.style.height = `${h}px`;
+    pill.style.bottom = 'auto';
+    pill.style.width = `${w}px`;
+    pill.style.setProperty('--lp-x', `${x}px`);
+    pill.style.setProperty('--lp-sx', '1');
+    pill.style.setProperty('--lp-sy', '1');
+    pill.classList.add('ready');
+    void pill.offsetWidth;
+    requestAnimationFrame(() => pill.classList.remove('no-anim'));
+  } else {
+    const prevX = parseFloat(pill.dataset.lpX);
+    if (Number.isFinite(prevX) && Math.abs(x - prevX) > 1) {
+      const isPixel = state.uiStyle === 'pixel';
+      pill.style.setProperty('--lp-sx', isPixel ? '1.04' : '1.08');
+      pill.style.setProperty('--lp-sy', isPixel ? '0.96' : '0.93');
+      clearTimeout(pill._stretchTimer);
+      pill._stretchTimer = setTimeout(() => {
+        pill.style.setProperty('--lp-sx', '1');
+        pill.style.setProperty('--lp-sy', '1');
+      }, 145);
+    }
+    pill.style.top = `${y}px`;
+    pill.style.height = `${h}px`;
+    pill.style.bottom = 'auto';
+    pill.style.width = `${w}px`;
+    pill.style.setProperty('--lp-x', `${x}px`);
+  }
+  pill.dataset.lpX = String(x);
+}
+
+function syncAllLiquidTracks(instant = false) {
+  syncLiquidTrack('uiStyleSwitch', '.ui-sw-btn.active', instant);
+  syncLiquidTrack('tagBar', '.chip.active', instant);
+  syncLiquidTrack('authModeTabs', '.auth-tab.active', instant);
+  syncLiquidTrack('creditTabs', '.credit-tab.active', instant);
+}
+
+function formatAnimatedScore(v, hasDecimal) {
+  if (hasDecimal) return (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, '');
+  return String(Math.round(v));
+}
+
+function animateNumber(el, targetVal, duration = 420) {
+  if (!el) return;
+  const target = Math.round((Number(targetVal) || 0) * 10) / 10;
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const prevRaw = el.dataset.numVal;
+  const from = prevRaw !== undefined ? Number(prevRaw) : null;
+  if (el._animRaf) {
+    cancelAnimationFrame(el._animRaf);
+    el._animRaf = null;
+  }
+  el.dataset.numVal = String(target);
+  if (reduced || from === null || !Number.isFinite(from) || Math.abs(target - from) < 0.05) {
+    el.textContent = String(target);
+    return;
+  }
+  const hasDecimal = !Number.isInteger(target) || !Number.isInteger(from);
+  const startTime = performance.now();
+  const step = (now) => {
+    const t = Math.min(1, (now - startTime) / duration);
+    const eased = 1 - Math.pow(1 - t, 4);
+    const cur = from + (target - from) * eased;
+    el.textContent = t >= 1 ? String(target) : formatAnimatedScore(cur, hasDecimal);
+    if (t < 1) {
+      el._animRaf = requestAnimationFrame(step);
+    } else {
+      el._animRaf = null;
+    }
+  };
+  el._animRaf = requestAnimationFrame(step);
 }
 
 function escapeHtml(str) {
@@ -182,10 +290,12 @@ function toggleDarkLightTheme() {
     localStorage.setItem(THEME_KEY, next);
   } catch {}
   syncThemeToggleIcon();
+  requestAnimationFrame(() => syncAllLiquidTracks(true));
+  showGlassToast(next === 'dark' ? '🌙 已切换暗色主题' : '☀ 已切换亮色主题');
   haptic(10);
 }
 
-function updateUiStyleUI() {
+function updateUiStyleUI(instant = false) {
   const isPixel = state.uiStyle === 'pixel';
   document.documentElement.setAttribute('data-ui', state.uiStyle);
   document.querySelectorAll('#uiStyleSwitch [data-ui-choice]').forEach((btn) => {
@@ -208,17 +318,27 @@ function updateUiStyleUI() {
   if (csTitle) csTitle.textContent = isPixel ? '⚔ 冒险者二课档案' : '我的二课成绩';
   const posterTitle = document.getElementById('posterTitle');
   if (posterTitle) posterTitle.textContent = isPixel ? '像素悬赏通缉令' : '活动分享卡片图';
+  requestAnimationFrame(() => {
+    syncLiquidTrack('uiStyleSwitch', '.ui-sw-btn.active', instant);
+    syncLiquidTrack('tagBar', '.chip.active', true);
+    syncLiquidTrack('authModeTabs', '.auth-tab.active', true);
+    syncLiquidTrack('creditTabs', '.credit-tab.active', true);
+  });
 }
 
 function setUiStyle(nextStyle) {
   const normalized = nextStyle === 'pixel' ? 'pixel' : 'minimal';
+  const changed = state.uiStyle !== normalized;
   state.uiStyle = normalized;
   try {
     localStorage.setItem(UI_STYLE_KEY, normalized);
   } catch {}
-  updateUiStyleUI();
+  updateUiStyleUI(false);
   updateStudentUI();
   renderFilteredLocal({ animate: true });
+  if (changed) {
+    showGlassToast(normalized === 'pixel' ? '⚔ 已切换至像素悬赏模式' : '☁ 已切换至简约液态玻璃模式');
+  }
   haptic(12);
 }
 
@@ -395,25 +515,34 @@ function compactCreditLabel(item, isUncertain) {
 
 function compactTimeBrief(item, regSt) {
   if (regSt.kind === 'upcoming' && item.reg_start_at) {
-    return { text: `${formatMdHm(item.reg_start_at)} 开抢`, hi: true };
+    return { text: `报名 ${formatMdHm(item.reg_start_at)}开抢`, hi: true };
   }
   if (regSt.kind === 'golden' && item.reg_end_at) {
-    return { text: `${formatMdHm(item.reg_end_at)} 截止`, hi: true };
+    return { text: `报名 ${formatMdHm(item.reg_end_at)}止`, hi: true };
+  }
+  if (regSt.kind === 'golden' && item.reg_start_at) {
+    return { text: `报名 ${formatMdHm(item.reg_start_at)}起`, hi: true };
   }
   if (regSt.kind === 'low_stock' && item.reg_start_at) {
-    return { text: `${formatMdHm(item.reg_start_at)} 已开抢`, hi: false };
+    return { text: `报名 ${formatMdHm(item.reg_start_at)}已开`, hi: false };
   }
   if (item.reg_end_at) {
-    return { text: `${formatMdHm(item.reg_end_at)} 截止`, hi: regSt.kind === 'urgent' };
+    return { text: `报名 ${formatMdHm(item.reg_end_at)}止`, hi: regSt.kind === 'urgent' };
   }
   if (item.reg_start_at) {
-    return { text: `${formatMdHm(item.reg_start_at)} 起`, hi: false };
+    return { text: `报名 ${formatMdHm(item.reg_start_at)}起`, hi: false };
   }
-  if (item.reg_time_text) {
-    const t = String(item.reg_time_text).trim();
-    return { text: t.length > 16 ? `${t.slice(0, 15)}…` : t, hi: false };
+  const rawReg = String(item.reg_time_text || item.deadline || '').trim();
+  if (
+    rawReg &&
+    !/未写明|未说明|未提及|详见推文/.test(rawReg) &&
+    /[\d]|今天|明天|今晚|明早|周[一二三四五六日天]|即日起|长期/.test(rawReg)
+  ) {
+    const cleaned = rawReg.replace(/^报名(?:时间|日期)?[：:\s]*/, '').trim();
+    const short = cleaned.length > 13 ? `${cleaned.slice(0, 12)}…` : cleaned;
+    return { text: `报名 ${short}`, hi: false };
   }
-  return { text: formatAgo(item.published_at) || '详见推文', hi: false };
+  return { text: '报名 详见推文', hi: false };
 }
 
 function inferModuleKeyFromItem(item) {
@@ -582,6 +711,9 @@ async function studentLogout() {
   setLocalActiveUsername('');
   state.studentUser = null;
   state.studentRecords = [];
+  state.prevModScores = {};
+  const totalEl = document.getElementById('cdTotalValid');
+  if (totalEl) delete totalEl.dataset.numVal;
   updateStudentUI();
   renderFilteredLocal();
 }
@@ -842,6 +974,7 @@ function renderCreditSheetContent(summary) {
         ? '⚔ 创建冒险者档案'
         : '创建账号并开始记录'
       : '登录查看二课成绩';
+    requestAnimationFrame(() => syncLiquidTrack('authModeTabs', '.auth-tab.active'));
     return;
   }
 
@@ -855,7 +988,7 @@ function renderCreditSheetContent(summary) {
   document.getElementById('cdUsernameSub').textContent = `@${state.studentUser.username} · ${
     state.studentBackendMode ? '本地数据库实时保存' : '本机浏览器保存（支持同步口令）'
   }`;
-  document.getElementById('cdTotalValid').textContent = String(summary.totalValid);
+  animateNumber(document.getElementById('cdTotalValid'), summary.totalValid, 440);
   document.getElementById('cdTotalRawMeta').textContent = `已参加 ${summary.attendedCount} 项 · 已报名待参加 ${
     summary.registeredCount
   } 项${summary.totalRaw > summary.totalValid ? `（含溢出 ${Math.round((summary.totalRaw - summary.totalValid) * 10) / 10} 分）` : ''}`;
@@ -891,12 +1024,20 @@ function renderCreditSheetContent(summary) {
   document.getElementById('ctabOverview').classList.toggle('hidden', state.creditTab !== 'overview');
   document.getElementById('ctabRegistered').classList.toggle('hidden', state.creditTab !== 'registered');
   document.getElementById('ctabHistory').classList.toggle('hidden', state.creditTab !== 'history');
+  requestAnimationFrame(() => syncLiquidTrack('creditTabs', '.credit-tab.active'));
 
-  // Tab 1: 5-Module Progress Bars (Supports both Minimal Bar & Pixel 10-Cell Segmented HP Bar)
+  // Tab 1: 5-Module Progress Bars (AnimatedCount + Spring Bar + Pixel 10-Cell Segmented HP Bar)
   const modList = document.getElementById('moduleBarsList');
+  const prevScores = state.prevModScores || {};
+  const nextPrevScores = {};
+  const fillTransitions = [];
   modList.innerHTML = BUCT_MODULES.map((m) => {
     const s = summary.byMod[m.key];
     const pct = Math.min(100, Math.round((s.capped / m.max) * 100));
+    const prevVal = prevScores[m.key];
+    const startPct = prevVal !== undefined ? Math.min(100, Math.round((prevVal / m.max) * 100)) : pct;
+    if (startPct !== pct) fillTransitions.push({ key: m.key, pct });
+    nextPrevScores[m.key] = s.capped;
     const filledCells = Math.min(10, Math.round((s.capped / m.max) * 10));
     const gapHtml = s.full
       ? '<span class="mod-gap full">✓ 已修满</span>'
@@ -905,9 +1046,9 @@ function renderCreditSheetContent(summary) {
       <div class="mod-row" style="--mc:${m.color}">
         <div class="mod-row-top">
           <span class="mod-name"><span class="mod-dot"></span>${m.name}</span>
-          <span class="mod-nums">${s.capped} / ${m.max}${gapHtml}</span>
+          <span class="mod-nums"><span class="mod-num-val" data-mod-key="${m.key}">${prevVal !== undefined ? prevVal : s.capped}</span> / ${m.max}${gapHtml}</span>
         </div>
-        <div class="mod-track"><div class="mod-fill" style="width:${pct}%"></div></div>
+        <div class="mod-track"><div class="mod-fill" data-mod-fill="${m.key}" style="width:${startPct}%"></div></div>
         <div class="mod-px-cells">
           ${Array.from({ length: 10 }, (_, i) => `<span class="mod-px-cell ${i < filledCells ? 'filled' : ''}"></span>`).join('')}
         </div>
@@ -915,7 +1056,22 @@ function renderCreditSheetContent(summary) {
     `;
   }).join('');
 
-  // Tab 2: Registered activities list
+  modList.querySelectorAll('.mod-num-val[data-mod-key]').forEach((numEl) => {
+    const k = numEl.dataset.modKey;
+    if (prevScores[k] !== undefined) numEl.dataset.numVal = String(prevScores[k]);
+    animateNumber(numEl, summary.byMod[k]?.capped ?? 0, 380);
+  });
+  if (fillTransitions.length) {
+    requestAnimationFrame(() => {
+      for (const ft of fillTransitions) {
+        const bar = modList.querySelector(`.mod-fill[data-mod-fill="${ft.key}"]`);
+        if (bar) bar.style.width = `${ft.pct}%`;
+      }
+    });
+  }
+  state.prevModScores = nextPrevScores;
+
+  // Tab 2: Registered activities list (with explicit compact registration date)
   const regRecords = state.studentRecords.filter((r) => r.status === 'registered');
   const regListEl = document.getElementById('registeredList');
   if (!regRecords.length) {
@@ -924,13 +1080,20 @@ function renderCreditSheetContent(summary) {
     regListEl.innerHTML = regRecords
       .map((r) => {
         const mod = BUCT_MODULE_MAP[r.module_key] || BUCT_MODULES[0];
+        const linkedAct = state.allItems.find((a) => Number(a.id) === Number(r.activity_id));
+        const regBrief = linkedAct
+          ? compactTimeBrief(linkedAct, getRegistrationStatus(linkedAct)).text
+          : r.event_date
+          ? `日期 ${r.event_date}`
+          : '已报名';
         return `
           <div class="rec-item">
             <div class="rec-main">
               <div class="rec-title">${escapeHtml(r.title)}</div>
               <div class="rec-meta">
                 <span style="color:${mod.color};font-weight:700">${mod.name}</span>
-                <span>已报名 · 待确认参加</span>
+                <span>${escapeHtml(regBrief)}</span>
+                <span>待确认参加</span>
               </div>
             </div>
             <div class="rec-side">
@@ -1081,7 +1244,7 @@ function closeSyncCodeModal() {
 function exportCreditsCsv() {
   const attended = state.studentRecords.filter((r) => r.status === 'attended');
   if (!attended.length) {
-    alert('当前还没有已参加的成绩记录');
+    showGlassToast('当前还没有已参加的成绩记录', 'warn');
     return;
   }
   const rows = [['活动名称', '所属模块', '分值', '日期', '备注']];
@@ -1098,6 +1261,7 @@ function exportCreditsCsv() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  showGlassToast('⬇ 已导出北化二课成绩单 CSV', 'success');
 }
 
 /* ==================== 本地快照 & 静音提醒 ==================== */
@@ -1255,23 +1419,37 @@ function updateFreshnessUI() {
 function renderTagBar() {
   const tagBar = document.getElementById('tagBar');
   if (!tagBar || !state.meta) return;
+  tagBar.classList.add('liquid-track');
   const total = state.allItems.length;
-  const parts = [
-    `<button class="chip ${state.tagId === '' ? 'active' : ''}" data-tag-id="" type="button" style="--c:#0e1116">
-      <span>全部</span><span class="chip-count">${total}</span>
-    </button>`,
-  ];
-  for (const tag of state.meta.tags || []) {
-    const active = String(tag.id) === String(state.tagId);
-    parts.push(`
-      <button class="chip ${active ? 'active' : ''}" data-tag-id="${tag.id}" type="button" style="--c:${safeColor(tag.color)}">
-        <span class="chip-dot"></span>
-        <span>${escapeHtml(tag.name)}</span>
-        <span class="chip-count">${tag.published_count || 0}</span>
-      </button>
-    `);
+  const tags = state.meta.tags || [];
+  const sig = `${total}|${tags.map((t) => `${t.id}:${t.name}:${t.color}:${t.published_count || 0}`).join('|')}`;
+  const rebuilt = tagBar.dataset.sig !== sig || !tagBar.querySelector(':scope > .liquid-pill-bg');
+
+  if (rebuilt) {
+    const parts = [
+      '<span class="liquid-pill-bg" aria-hidden="true"></span>',
+      `<button class="chip ${state.tagId === '' ? 'active' : ''}" data-tag-id="" type="button" style="--c:#0e1116">
+        <span>全部</span><span class="chip-count">${total}</span>
+      </button>`,
+    ];
+    for (const tag of tags) {
+      const active = String(tag.id) === String(state.tagId);
+      parts.push(`
+        <button class="chip ${active ? 'active' : ''}" data-tag-id="${tag.id}" type="button" style="--c:${safeColor(tag.color)}">
+          <span class="chip-dot"></span>
+          <span>${escapeHtml(tag.name)}</span>
+          <span class="chip-count">${tag.published_count || 0}</span>
+        </button>
+      `);
+    }
+    tagBar.innerHTML = parts.join('');
+    tagBar.dataset.sig = sig;
+  } else {
+    tagBar.querySelectorAll('.chip').forEach((btn) => {
+      btn.classList.toggle('active', String(btn.dataset.tagId || '') === String(state.tagId));
+    });
   }
-  tagBar.innerHTML = parts.join('');
+  requestAnimationFrame(() => syncLiquidTrack('tagBar', '.chip.active', rebuilt));
 }
 
 function renderSourceSelect() {
@@ -1532,9 +1710,16 @@ function syncBodySheetLock() {
 function openSheet(sheetId) {
   const el = document.getElementById(sheetId);
   if (!el) return;
+  el.style.backgroundColor = '';
   el.classList.add('open');
   el.setAttribute('aria-hidden', 'false');
   syncBodySheetLock();
+  if (sheetId === 'creditSheet') {
+    requestAnimationFrame(() => {
+      syncLiquidTrack('authModeTabs', '.auth-tab.active', true);
+      syncLiquidTrack('creditTabs', '.credit-tab.active', true);
+    });
+  }
 }
 
 function closeSheet(sheetId) {
@@ -1542,6 +1727,7 @@ function closeSheet(sheetId) {
   if (!el) return;
   el.classList.remove('open');
   el.setAttribute('aria-hidden', 'true');
+  el.style.backgroundColor = '';
   const panel = el.querySelector('.sheet-panel');
   if (panel) {
     panel.classList.remove('dragging');
@@ -1560,13 +1746,14 @@ function attachSheetSwipeDismiss(sheetId) {
   let startY = 0;
   let currentDy = 0;
   let tracking = false;
+  let startedInHandle = false;
 
   panel.addEventListener(
     'touchstart',
     (e) => {
       if (e.touches.length !== 1) return;
-      const inHandle = Boolean(e.target.closest('.sheet-handle-area, .sheet-head'));
-      if (!inHandle && body && body.scrollTop > 2) return;
+      startedInHandle = Boolean(e.target.closest('.sheet-handle-area, .sheet-head'));
+      if (!startedInHandle && body && body.scrollTop > 2) return;
       startY = e.touches[0].clientY;
       currentDy = 0;
       tracking = true;
@@ -1579,22 +1766,34 @@ function attachSheetSwipeDismiss(sheetId) {
     (e) => {
       if (!tracking) return;
       const dy = e.touches[0].clientY - startY;
-      if (dy <= 0) {
-        if (currentDy > 0) {
+      if (dy < 0) {
+        if (startedInHandle) {
+          // 向上轻拉的橡皮筋阻尼弹性 (DampedDragAnimation)
+          const stretchY = -Math.min(18, Math.pow(Math.abs(dy), 0.72) * 0.55);
+          currentDy = 0;
+          panel.classList.add('dragging');
+          panel.style.transform = `translate3d(0, ${stretchY.toFixed(1)}px, 0)`;
+          backdrop.style.backgroundColor = '';
+        } else if (currentDy > 0) {
           currentDy = 0;
           panel.style.transform = '';
+          backdrop.style.backgroundColor = '';
         }
         return;
       }
-      if (body && body.scrollTop > 2) {
+      if (!startedInHandle && body && body.scrollTop > 2) {
         tracking = false;
         panel.classList.remove('dragging');
         panel.style.transform = '';
+        backdrop.style.backgroundColor = '';
         return;
       }
       currentDy = dy;
+      const visualY = dy <= 260 ? dy : 260 + (dy - 260) * 0.45;
       panel.classList.add('dragging');
-      panel.style.transform = `translate3d(0, ${Math.min(dy, 420)}px, 0)`;
+      panel.style.transform = `translate3d(0, ${Math.min(visualY, 440).toFixed(1)}px, 0)`;
+      const ratio = Math.min(1, dy / 320);
+      backdrop.style.backgroundColor = `rgba(15, 23, 42, ${(0.46 * (1 - ratio * 0.72)).toFixed(3)})`;
     },
     { passive: true }
   );
@@ -1603,9 +1802,15 @@ function attachSheetSwipeDismiss(sheetId) {
     if (!tracking) return;
     tracking = false;
     panel.classList.remove('dragging');
-    if (currentDy > 85) closeSheet(sheetId);
-    else panel.style.transform = '';
+    backdrop.style.backgroundColor = '';
+    if (currentDy > 85) {
+      haptic(6);
+      closeSheet(sheetId);
+    } else {
+      panel.style.transform = '';
+    }
     currentDy = 0;
+    startedInHandle = false;
   };
   panel.addEventListener('touchend', finishSwipe, { passive: true });
   panel.addEventListener('touchcancel', finishSwipe, { passive: true });
@@ -1694,7 +1899,7 @@ function renderDetailSheetContent(item) {
     </div>
     <div class="ds-time-card">
       <div class="time-row">
-        <span class="time-key">${isPixel ? '委托期限' : '报名时间'}</span>
+        <span class="time-key">${isPixel ? '报名期限' : '报名日期'}</span>
         <span class="time-val reg-highlight">${escapeHtml(regDisplay)}</span>
       </div>
       ${
@@ -2012,7 +2217,7 @@ function generatePosterDataUrl(item) {
   const tagName = primary?.name || '二课活动';
   const audShort = compactAudienceLabel(item).text;
   const scoreShort = compactCreditLabel(item, Boolean(item.is_uncertain)) || '详见推文';
-  const regDisplay = compactTimeBrief(item, regSt).text;
+  const regDisplay = compactTimeBrief(item, regSt).text.replace(/^报名\s+/, '');
   const jumpUrl = safeHref(item.source_article_url);
   const W = 750, H = 1040;
   const canvas = document.createElement('canvas');
@@ -2077,7 +2282,7 @@ function generatePosterDataUrl(item) {
   const rows = [
     { k: isPixel ? '🪙 悬赏学分' : '二课参考', v: scoreShort },
     { k: isPixel ? '🛡 招募对象' : '面向人群', v: audShort },
-    { k: isPixel ? '⏱ 报名期限' : '报名时间', v: regDisplay },
+    { k: isPixel ? '⏱ 报名期限' : '报名日期', v: regDisplay },
     { k: isPixel ? '🏰 发布公会' : '来源公众号', v: item.source_account_name || '校内公众号' },
   ];
   const boxH = rows.length * 58 + 30;
@@ -2251,6 +2456,7 @@ document.getElementById('tagBar').addEventListener('click', (e) => {
   state.tagId = btn.dataset.tagId || '';
   haptic(8);
   renderTagBar();
+  btn.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
   renderFilteredLocal({ animate: true });
 });
 
@@ -2302,6 +2508,7 @@ document.getElementById('fsResetBtn').addEventListener('click', () => {
   state.hideEnded = false;
   haptic(10);
   renderFilteredLocal({ animate: true });
+  showGlassToast('已重置全部筛选条件');
 });
 document.getElementById('fsDoneBtn').addEventListener('click', () => closeSheet('filterSheet'));
 
@@ -2339,6 +2546,10 @@ document.getElementById('detailSheet').addEventListener('click', async (e) => {
         status: 'registered',
         eventDate: formatEventTimeDisplay(item.event_time) || new Date().toISOString().slice(0, 10),
       });
+      showGlassToast(
+        state.uiStyle === 'pixel' ? '⚔ 悬赏已接取！参加后可领赏' : '✓ 已标记报名成功',
+        'success'
+      );
       haptic(14);
     });
     return;
@@ -2355,6 +2566,7 @@ document.getElementById('detailSheet').addEventListener('click', async (e) => {
   if (untrackBtn) {
     const aid = Number(untrackBtn.dataset.dsUntrack);
     await saveActivityRecord({ activityId: aid, status: 'none' });
+    showGlassToast('已取消该活动标记');
     haptic(10);
     return;
   }
@@ -2397,12 +2609,21 @@ document.getElementById('studentAuthForm').addEventListener('submit', async (e) 
   const dname = document.getElementById('saDisplayName').value.trim();
   const pass = document.getElementById('saPassword').value;
   try {
-    if (state.authMode === 'register') {
+    const wasReg = state.authMode === 'register';
+    if (wasReg) {
       await studentRegister(uname, dname, pass);
     } else {
       await studentLogin(uname, pass);
     }
     document.getElementById('saPassword').value = '';
+    showGlassToast(
+      wasReg
+        ? state.uiStyle === 'pixel'
+          ? '⚔ 冒险者档案已创建！'
+          : '🎉 二课账号已创建'
+        : '✓ 欢迎回来，已同步二课成绩',
+      'success'
+    );
     haptic(14);
     if (typeof state.afterLoginAction === 'function') {
       const fn = state.afterLoginAction;
@@ -2420,6 +2641,7 @@ document.getElementById('studentAuthForm').addEventListener('submit', async (e) 
 
 document.getElementById('studentLogoutBtn').addEventListener('click', async () => {
   await studentLogout();
+  showGlassToast('已退出当前二课账号');
   haptic(10);
 });
 
@@ -2477,6 +2699,7 @@ document.getElementById('creditSheetBody').addEventListener('click', async (e) =
   if (delBtn) {
     if (!confirm('确认删除这条记录吗？')) return;
     await removeStudentRecord(Number(delBtn.dataset.delRecId));
+    showGlassToast('已删除该条二课记录');
     haptic(10);
   }
 });
@@ -2519,6 +2742,11 @@ document.getElementById('amSaveBtn').addEventListener('click', async () => {
     });
   }
   closeAttendModal();
+  const modName = BUCT_MODULE_MAP[moduleKey]?.name || '二课';
+  showGlassToast(
+    state.uiStyle === 'pixel' ? `🏆 悬赏交付！${modName} +${score}分` : `✓ 已记入 ${modName} +${score}分`,
+    'success'
+  );
   haptic(18);
 });
 
@@ -2530,15 +2758,20 @@ document.getElementById('manualCreditModal').addEventListener('click', (e) => {
 });
 document.getElementById('manualCreditForm').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const wasEditing = Boolean(state.editingManualId);
+  const moduleKey = document.getElementById('mcModule').value;
+  const score = Number(document.getElementById('mcScore').value) || 0;
   await saveManualRecord({
     id: state.editingManualId,
     title: document.getElementById('mcName').value.trim(),
-    moduleKey: document.getElementById('mcModule').value,
-    score: Number(document.getElementById('mcScore').value) || 0,
+    moduleKey,
+    score,
     eventDate: document.getElementById('mcDate').value,
     note: document.getElementById('mcNote').value.trim(),
   });
   closeManualCreditModal();
+  const modName = BUCT_MODULE_MAP[moduleKey]?.name || '二课';
+  showGlassToast(wasEditing ? '✓ 已更新二课成绩' : `✓ 已补录 ${modName} +${score}分`, 'success');
   haptic(14);
 });
 
@@ -2554,6 +2787,7 @@ document.getElementById('scCopyBtn').addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(val);
     document.getElementById('scCopyBtn').textContent = '✓ 已复制备份口令';
+    showGlassToast('📋 已复制同步口令', 'success');
     haptic(10);
   } catch {
     prompt('请复制下方同步口令：', val);
@@ -2581,7 +2815,7 @@ document.getElementById('scImportBtn').addEventListener('click', async () => {
         state.studentUser = { username: db.users[key].username, display_name: db.users[key].display_name };
         state.studentRecords = db.users[key].records || [];
       } else {
-        alert('请先登录一个个人账号，再导入同步口令合并成绩');
+        showGlassToast('请先登录个人账号后再导入同步口令', 'warn');
         return;
       }
     }
@@ -2615,9 +2849,9 @@ document.getElementById('scImportBtn').addEventListener('click', async () => {
     updateStudentUI();
     renderFilteredLocal();
     closeSyncCodeModal();
-    alert(`已成功导入 ${parsed.r.length} 条二课记录！`);
+    showGlassToast(`✓ 已成功导入 ${parsed.r.length} 条二课记录`, 'success');
   } catch (err) {
-    alert(err.message || '口令解析失败');
+    showGlassToast(err.message || '口令解析失败', 'warn');
   }
 });
 
@@ -2637,7 +2871,7 @@ document.getElementById('rmSaveBtn').addEventListener('click', async () => {
   if (!item) return;
   const atMs = new Date(document.getElementById('rmCustomTime').value).getTime();
   if (!Number.isFinite(atMs) || atMs <= Date.now()) {
-    alert('请选择一个晚于当前时间的提醒时间');
+    showGlassToast('请选择一个晚于当前时间的提醒时间', 'warn');
     return;
   }
   if ('Notification' in window && Notification.permission === 'default') {
@@ -2653,6 +2887,7 @@ document.getElementById('rmSaveBtn').addEventListener('click', async () => {
   saveReminders();
   closeRemindModal();
   renderFilteredLocal();
+  showGlassToast('🔔 已设定静音报名提醒', 'success');
 });
 document.getElementById('rmCancelExisting').addEventListener('click', () => {
   const item = state.editingRemindItem;
@@ -2661,6 +2896,7 @@ document.getElementById('rmCancelExisting').addEventListener('click', () => {
   saveReminders();
   closeRemindModal();
   renderFilteredLocal();
+  showGlassToast('已取消该活动提醒');
 });
 document.getElementById('rmIcsBtn').addEventListener('click', () => {
   const item = state.editingRemindItem;
@@ -2690,6 +2926,7 @@ document.getElementById('posterCopyBtn').addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(text);
     document.getElementById('posterCopyBtn').textContent = '✓ 已复制链接';
+    showGlassToast('🔗 已复制活动推文链接', 'success');
   } catch {
     prompt('请复制下方活动链接：', text);
   }
@@ -2723,12 +2960,31 @@ document.getElementById('refreshBtn')?.addEventListener('click', refreshAll);
 document.getElementById('retryOnlineBtn')?.addEventListener('click', refreshAll);
 
 const backTop = document.getElementById('backTop');
-window.addEventListener('scroll', () => backTop.classList.toggle('show', window.scrollY > 500), { passive: true });
+const syncScrollChrome = () => {
+  const y = window.scrollY || 0;
+  backTop.classList.toggle('show', y > 500);
+  document.body.classList.toggle('is-scrolled', y > 16);
+};
+window.addEventListener('scroll', syncScrollChrome, { passive: true });
+syncScrollChrome();
 backTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+let resizePillTimer = null;
+window.addEventListener(
+  'resize',
+  () => {
+    clearTimeout(resizePillTimer);
+    resizePillTimer = setTimeout(() => syncAllLiquidTracks(true), 80);
+  },
+  { passive: true }
+);
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => syncAllLiquidTracks(true)).catch(() => {});
+}
 
 /* ==================== 启动与定时器 ==================== */
 syncThemeToggleIcon();
-updateUiStyleUI();
+updateUiStyleUI(true);
 loadReminders();
 syncFilterControlsUI();
 initStudentSession();
