@@ -1,5 +1,13 @@
-const SHELL_CACHE = 'buct-hub-shell-v14';
-const SHELL_ASSETS = ['./', './index.html', './styles.css', './home.css', './themes.css', './app.js', './manifest.json'];
+const SHELL_CACHE = 'buct-hub-shell-v16';
+const SHELL_ASSETS = [
+  './',
+  './index.html',
+  './styles.css?v=16',
+  './home.css?v=16',
+  './themes.css?v=16',
+  './app.js?v=16',
+  './manifest.json',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -44,7 +52,7 @@ self.addEventListener('fetch', (event) => {
       try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 4500);
-        const netRes = await fetch(req, { signal: controller.signal });
+        const netRes = await fetch(req, { signal: controller.signal, cache: 'no-cache' });
         clearTimeout(timer);
 
         if (netRes && netRes.ok) {
