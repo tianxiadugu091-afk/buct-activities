@@ -3562,7 +3562,7 @@ document.getElementById('posterCopyBtn').addEventListener('click', async () => {
   const el = document.getElementById(sheetId);
   if (!el) return;
   el.addEventListener('click', (e) => {
-    if (e.target === el) closeSheet(sheetId);
+    if (e.target === el && (sheetId !== 'creditSheet' || state.studentUser)) closeSheet(sheetId);
     const closeBtn = e.target.closest('[data-sheet-close]');
     if (closeBtn) closeSheet(closeBtn.dataset.sheetClose);
   });
